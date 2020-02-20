@@ -41,6 +41,7 @@ XiaomiGateway * XiaomiGateway::GatewayByIp(std::string ip)
 		std::list<XiaomiGateway*>::iterator    it = gatewaylist.begin();
 		for (; it != gatewaylist.end(); it++)
 		{
+			_log.Log(LOG_ERROR, "XiaomiGateway: by ip 	yp %s  %s", (*it)->GetGatewayIp().c_str(), ip.c_str());
 			if ((*it)->GetGatewayIp() == ip)
 			{
 				ret = (*it);
@@ -309,6 +310,9 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 			m_GatewayVolume = std::to_string(xcmd->level);
 			//sid.insert(0, m_GatewayPrefix);
 			message = "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"" + m_GatewaySID + "\",\"short_id\":0,\"data\":\"{\\\"mid\\\":" + m_GatewayMusicId.c_str() + ",\\\"vol\\\":" + m_GatewayVolume.c_str() + ",\\\"key\\\":\\\"@gatewaykey\\\"}\" }";
+		}
+		else if (xcmd->subtype == sSwitchGeneralSwitch && xcmd->unitcode == 254){
+			message = "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"" + m_GatewaySID + "\",\"short_id\":0,\"data\":\"{\\\"rgb\\\":1234,\\\"key\\\":\\\"@gatewaykey\\\"}\" }";
 		}
 		else if (xcmd->subtype == sSwitchBlindsT2) {
 			int level = xcmd->level;
@@ -948,6 +952,7 @@ XiaomiGateway::xiaomi_udp_server::xiaomi_udp_server(boost::asio::io_service& io_
 	if (listenPort9898) {
 		try {
 			socket_.set_option(boost::asio::ip::udp::socket::reuse_address(true));
+			_log.Log(LOG_ERROR, "XiaomiGateway: xiaomi_udp_server m_localip： %s", m_localip.c_str());
 			if (m_localip != "") {
 				boost::system::error_code ec;
 				boost::asio::ip::address listen_addr = boost::asio::ip::address::from_string(m_localip, ec);
@@ -1333,6 +1338,8 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 								TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Doorbell", false, STYPE_Selector, 5, 0, cmd, "", "", 255);
 								TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway MP3", false, STYPE_OnOff, 6, 0, cmd, "", "", 255);
 								TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Volume", false, STYPE_Dimmer, 7, 0, cmd, "", "", 255);
+								TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Join Button", false, STYPE_OnOff, 254, 0, cmd, "", "", 255);
+								
 							}
 						}
 						else {
@@ -1385,6 +1392,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Doorbell", false, STYPE_Selector, 5, 0, cmd, "", "", 255);
 						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway MP3", false, STYPE_OnOff, 6, 0, cmd, "", "", 255);
 						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Volume", false, STYPE_Dimmer, 7, 0, cmd, "", "", 255);
+						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Join Button", false, STYPE_OnOff, 254, 0, cmd, "", "", 255);
 
 						//query for list of devices
 						std::string message = "{\"cmd\" : \"get_id_list\"}";
