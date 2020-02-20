@@ -954,7 +954,7 @@ XiaomiGateway::xiaomi_udp_server::xiaomi_udp_server(boost::asio::io_service& io_
 				boost::asio::ip::address mcast_addr = boost::asio::ip::address::from_string("224.0.0.50", ec);
 				boost::asio::ip::udp::endpoint listen_endpoint(mcast_addr, 9898);
 
-				socket_.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 9898));
+				socket_.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 9494));
 				std::shared_ptr<std::string> message(new std::string("{\"cmd\":\"whois\"}"));
 				boost::asio::ip::udp::endpoint remote_endpoint;
 				remote_endpoint = boost::asio::ip::udp::endpoint(mcast_addr, 4321);
@@ -963,7 +963,7 @@ XiaomiGateway::xiaomi_udp_server::xiaomi_udp_server(boost::asio::io_service& io_
 				socket_.bind(listen_endpoint, ec);
 			}
 			else {
-				socket_.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 9898));
+				socket_.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 9494));
 				std::shared_ptr<std::string> message(new std::string("{\"cmd\":\"whois\"}"));
 				boost::asio::ip::udp::endpoint remote_endpoint;
 				remote_endpoint = boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("224.0.0.50"), 4321);

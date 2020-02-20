@@ -25,6 +25,7 @@ stdafx.h.gch
 Config/OZW_Log.txt
 Config/zwscene.xml
 backups/
+build/
 domocookie.txt
 domoticz.exe
 nohup.out
