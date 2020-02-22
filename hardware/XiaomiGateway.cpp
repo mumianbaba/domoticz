@@ -26,6 +26,41 @@ Protocol is Zigbee and WiFi, and the gateway and
 Domoticz need to be in the same network/subnet with multicast working
 */
 
+namespace xiaomi{
+
+const char* key_cmd = "cmd";
+const char* key_model = "model";
+const char* key_sid = "sid";
+const char* key_params = "params";
+const char* key_token = "token";
+const char* key_dev_list ="dev_list";
+const char* key_ip =	"ip";
+const char* key_protocal ="protocal";
+const char* key_port ="port";
+
+const char* key_battery = "battery_voltage";
+
+const char* cmd_whois = "whois";
+const char* rsp_whois = "iam";
+
+const char* cmd_discorey = "discovery";
+const char* rsp_discorey = "discovery_rsp";
+
+const char* cmd_read = "read";
+const char* rsp_read = "read_rsp";
+
+const char* cmd_write = "write";
+const char* rsp_write = "write_rsp";
+
+const char* rep_report = "report";
+const char* rep_hbeat = "heartbeat";
+
+
+
+
+}
+
+
 #define round(a) ( int ) ( a + .5 )
 // Removing this vector and use unitcode to tell what kind of device each is
 //std::vector<std::string> arrAqara_Wired_ID;
@@ -638,8 +673,8 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Click|Double Click", false));
 				}
 				else if (Name == "Xiaomi Smart Push Button") {
-					// click/double click
-					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Click|Shake", false));
+					// click/double click/long Click/share
+					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Click|Double Click|Long Click|Shake", false));
 				}
 				else if (Name == "Xiaomi Cube") {
 					// flip90/flip180/move/tap_twice/shake_air/swing/alert/free_fall
@@ -655,7 +690,7 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 				}
 				else if (Name == "Xiaomi Wireless Dual Wall Switch") {
 					//for Aqara wireless switch, 2 buttons support
-					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Switch 1|Switch 2|Both Click|Switch 1 Double Click|Switch 2 Double Click|Both Double Click|Switch 1 Long Click|Switch 2 Long Click|Both Long Click", false));
+					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Switch 1|Switch 1 Double Click|Switch 2|Switch 2 Double Click|Both Click", false));
 				}
 				else if (Name == "Xiaomi Wired Single Wall Switch") {
 					//for Aqara wired switch, single button support
@@ -663,7 +698,7 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 				}
 				else if (Name == "Xiaomi Wireless Single Wall Switch") {
 					//for Aqara wireless switch, single button support
-					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Click|Double Click|Long Click", false));
+					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Click|Double Click", false));
 				}
 				else if (Name == "Xiaomi Gateway Alarm Ringtone") {
 					//for the Gateway Audio
@@ -1023,295 +1058,530 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 			return;
 		}
 		else {
-			std::string cmd = root["cmd"].asString();
-			std::string model = root["model"].asString();
-			std::string sid = root["sid"].asString();
-			std::string data = root["data"].asString();
+			std::string cmd = root[xiaomi::key_cmd].asString();
+			std::string model = root[xiaomi::key_model].asString();
+			std::string sid = root[xiaomi::key_sid].asString();
+			//std::string params = root[xiaomi::key_params].asString();
+			Json::Value params = root[xiaomi::key_params];
+
+			_log.Log(LOG_STATUS, "XiaomiGateway: cmd  %s received!", cmd.c_str());
+			
 			int unitcode = 1;
-			if ((cmd == "report") || (cmd == "read_ack") || (cmd == "heartbeat"))
+			if ((cmd == xiaomi::rsp_read) || (cmd ==xiaomi::rsp_write) || (cmd == xiaomi::rep_report) || (cmd == xiaomi::rep_hbeat))
 			{
-				Json::Value root2;
-				ret = ParseJSon(data.c_str(), root2);
-				if ((ret) || (!root2.isObject()))
+				Json::Value root2 = params[0];
+
+				//if ((!root2.isObject()))
+				if (1)
 				{
 					_eSwitchType type = STYPE_END;
 					std::string name = "Xiaomi Switch";
-					if (model == "motion") {
+					
+					/* status */
+					std::string status = "";
+
+					bool commit = false;
+					bool on = false;
+					int level = -1;
+
+					std::string str_battery = "";
+					for (int i = 0; i < (int)params.size(); i++)
+					{							
+						if(params[i].isMember("battery_voltage"))
+						{
+							str_battery = params[i]["battery_voltage"].asString();
+						}
+					}
+
+					int battery = 255;
+					if (str_battery != "" && str_battery != "3600") {
+						battery = ((atoi(str_battery.c_str()) - 2200) / 10);
+					}
+					
+
+					/* 传感器 */
+					if (model == "motion" || model == "sensor_motion.aq2")
+					{
+						commit = false;
 						type = STYPE_Motion;
-						name = "Xiaomi Motion Sensor";
+						name =  (model == "motion")?"Xiaomi Motion Sensor":"Aqara Motion Sensor";
+						int ilux = -1;						
+						for (int i = 0; i < (int)params.size(); i++)
+						{
+							
+							if(params[i].isMember("motion_status"))
+							{
+								status = params[i]["motion_status"].asString();
+								on = (status ==  "motion")? true : false;
+								commit = true;
+							}
+							else if(params[i].isMember("lux"))
+							{
+								ilux = params[i]["lux"].asInt();
+							}
+							else if (params[i].isMember("illumination"))
+							{
+								ilux = params[i]["illumination"].asInt();
+							}
+						}
+						if (commit)
+						{
+							level = 0;
+							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
+						}
+						if (ilux > 0)
+						{
+							TrueGateway->InsertUpdateLux(sid.c_str(), name, ilux, battery);
+						}
 					}
-					else if (model == "sensor_motion.aq2") {
-						type = STYPE_Motion;
-						name = "Aqara Motion Sensor";
-					}
-					else if ((model == "switch") || (model == "remote.b1acn01")) {
-						type = STYPE_Selector;
-						name = "Xiaomi Wireless Switch";
-					}
-					else if (model == "sensor_switch.aq2") {
-						type = STYPE_Selector;
-						name = "Xiaomi Square Wireless Switch";
-					}
-					else if (model == "sensor_switch.aq3") {
-						type = STYPE_Selector;
-						name = "Xiaomi Smart Push Button";
-					}
-					else if ((model == "magnet") || (model == "sensor_magnet.aq2")) {
+					else if ((model == "magnet") || (model == "sensor_magnet.aq2"))
+					{
+						commit = false;
 						type = STYPE_Contact;
 						name = "Xiaomi Door Sensor";
+						for (int i = 0; i < (int)params.size(); i++)
+						{
+							if(params[i].isMember("window_status"))
+							{
+								status = params[i]["window_status"].asString();
+								on = (status ==  "open")?true : false;
+								commit = true;
+							}
+						}
+						if (commit)
+						{
+							level = 0;
+							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
+						}
 					}
-					else if (model == "plug") {
-						type = STYPE_OnOff;
-						name = "Xiaomi Smart Plug";
-					}
-					else if (model == "86plug" || model == "ctrl_86plug.aq1") {
-						type = STYPE_OnOff;
-						name = "Xiaomi Smart Wall Plug";
-					}
-					else if (model == "sensor_ht") {
-						name = "Xiaomi Temperature/Humidity";
-					}
-					else if (model == "weather.v1") {
-						name = "Xiaomi Aqara Weather";
-					}
-					else if (model == "cube") {
-						name = "Xiaomi Cube";
-						type = STYPE_Selector;
-					}
-					else if (model == "sensor_cube.aqgl01") {
-						name = "Aqara Cube";
-						type = STYPE_Selector;
-					}
-					else if (model == "86sw2" || model == "remote.b286acn01") {
-						name = "Xiaomi Wireless Dual Wall Switch";
-						type = STYPE_Selector;
-					}
-					else if (model == "vibration") {
-						name = "Aqara Vibration Sensor";
-						type = STYPE_Selector;
-					}
-					else if (model == "ctrl_neutral2" || model == "ctrl_ln2" || model == "ctrl_ln2.aq1") {
-						name = "Xiaomi Wired Dual Wall Switch";
-						//type = STYPE_Selector;
-					}
-					else if (model == "gateway" || model == "gateway.v3" || model == "acpartner.v3") {
-						name = "Xiaomi RGB Gateway";
-					}
-					else if (model == "ctrl_neutral1" || model == "ctrl_ln1" || model == "ctrl_ln1.aq1") {
-						name = "Xiaomi Wired Single Wall Switch";
-						//type = STYPE_Selector;
-					}
-					else if (model == "86sw1" || model == "remote.b186acn01") {
-						name = "Xiaomi Wireless Single Wall Switch";
-						type = STYPE_Selector;
-					}
-					else if (model == "smoke") {
-						name = "Xiaomi Smoke Detector";
-						type = STYPE_SMOKEDETECTOR;
-					}
-					else if (model == "natgas") {
-						name = "Xiaomi Gas Detector";
-						type = STYPE_SMOKEDETECTOR;
-					}
-					else if (model == "sensor_wleak.aq1") {
-						name = "Xiaomi Water Leak Detector";
-						type = STYPE_SMOKEDETECTOR;
-					}
-					else if (model == "curtain") {
-						name = "Xiaomi Curtain";
-						type = STYPE_BlindsPercentage;
-					}
-					std::string voltage = root2["voltage"].asString();
-					int battery = 255;
-					if (voltage != "" && voltage != "3600") {
-						battery = ((atoi(voltage.c_str()) - 2200) / 10);
-					}
-					if (type != STYPE_END)
+					else if (model == "sensor_ht" || model == "weather.v1" || model == "weather")
 					{
-						std::string status = root2["status"].asString();
-						std::string no_close = root2["no_close"].asString();
-						std::string no_motion = root2["no_motion"].asString();
-						//Aqara's Wireless switch reports per channel
-						std::string aqara_wireless1 = root2["channel_0"].asString();
-						std::string aqara_wireless2 = root2["channel_1"].asString();
-						std::string aqara_wireless3 = root2["dual_channel"].asString();
-						//Smart plug usage
-						std::string load_power = root2["load_power"].asString();
-						std::string power_consumed = root2["power_consumed"].asString();
-						//Smoke or Gas Detector
-						std::string density = root2["density"].asString();
-						std::string alarm = root2["alarm"].asString();
-						//Aqara motion sensor
-						std::string lux = root2["lux"].asString();
-						//Curtain
-						std::string curtain = root2["curtain_level"].asString();
-						bool on = false;
+						if (model == "sensor_ht")
+						{
+							name = "Xiaomi Temperature/Humidity";
+						}
+						else if (model == "weather.v1" || model == "weather" )
+						{
+							name = "Xiaomi Aqara Weather";
+						}
+						
+						std::string stemperature = "";
+						std::string shumidity = "";
+						std::string spressure = "";
+
+						float ftemperature = 0.0;
+						int   ihumidity = 0;
+						float fpressure = 0.0;
+
+						for (int i = 0; i < (int)params.size(); i++)
+						{
+							if(params[i].isMember("temperature"))
+							{
+								stemperature = params[i]["temperature"].asString();
+							}
+							else if (params[i].isMember("humidity"))
+							{
+								shumidity = params[i]["humidity"].asString();
+							}
+							else if (params[i].isMember("pressure"))
+							{
+								spressure = params[i]["pressure"].asString();
+							}							
+						}
+
+
+						if ((!stemperature.empty()) && (!shumidity.empty()) && (!spressure.empty()))
+						{
+							fpressure = static_cast<float>(atof(spressure.c_str())) / 100.0f;
+							//Temp+Hum+Baro
+							ftemperature = (float)atof(stemperature.c_str()) / 100.0f;
+							ihumidity = atoi(shumidity.c_str()) / 100;
+							TrueGateway->InsertUpdateTempHumPressure(sid.c_str(), "Xiaomi TempHumBaro", ftemperature, ihumidity, fpressure, battery);
+						}
+						else if ((!stemperature.empty()) && (!shumidity.empty()))
+						{
+							//Temp+Hum
+							ftemperature = (float)atof(stemperature.c_str()) / 100.0f;
+							ihumidity = atoi(shumidity.c_str()) / 100;
+							TrueGateway->InsertUpdateTempHum(sid.c_str(), "Xiaomi TempHum", ftemperature, ihumidity, battery);
+						}
+						else if (stemperature != "") {
+							ftemperature = (float)atof(stemperature.c_str()) / 100.0f;
+							if (ftemperature < 99) {
+								TrueGateway->InsertUpdateTemperature(sid.c_str(), "Xiaomi Temperature", ftemperature, battery);
+							}
+						}
+						else if (shumidity != "") {
+							ihumidity = atoi(shumidity.c_str()) / 100;
+							if (ihumidity > 1) {
+								TrueGateway->InsertUpdateHumidity(sid.c_str(), "Xiaomi Humidity", ihumidity, battery);
+							}
+						}
+					}
+					/* 状态型 */
+					else if (model == "plug" ||
+							model == "86plug" || model == "ctrl_86plug.aq1" ||
+							model == "ctrl_neutral1" || model == "ctrl_ln1" || model == "ctrl_ln1.aq1" ||
+							model == "ctrl_neutral2" || model == "ctrl_ln2" || model == "ctrl_ln2.aq1")
+					{
+						commit = false;
+						std::string load_power = "";
+						std::string  consumed = "";
+						
+						type = STYPE_OnOff;
+						if (model == "plug")
+						{
+							name = "Xiaomi Smart Plug";
+						}
+						else if (model == "86plug" || model == "ctrl_86plug.aq1")
+						{
+							name = "Xiaomi Smart Wall Plug";
+						}
+						else if (model == "ctrl_neutral1" || model == "ctrl_ln1" || model == "ctrl_ln1.aq1")
+						{
+							name = "Xiaomi Wired Single Wall Switch";
+						}
+						else if (model == "ctrl_neutral2" || model == "ctrl_ln2" || model == "ctrl_ln2.aq1")
+						{
+							name = "Xiaomi Wired Dual Wall Switch";
+						}
+
+						for (int i = 0; i < (int)params.size(); i++)
+						{
+							if(params[i].isMember("channel_0"))
+							{
+								status = params[i]["channel_0"].asString();
+								on = (status ==  "on")?true : false;
+								commit = true;
+								if (model == "ctrl_neutral1" || model == "ctrl_ln1" || model == "ctrl_ln1.aq1")
+								{
+									unitcode = 8;
+									TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, load_power, consumed, battery);
+									commit = false;
+								}
+								else if (model == "ctrl_neutral2" || model == "ctrl_ln2" || model == "ctrl_ln2.aq1")
+								{
+									unitcode = 9;
+									name = "Xiaomi Wired Dual Wall Switch Channel 0";
+									TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, load_power, consumed, battery);
+									commit = false;
+								}
+							}
+							else if(params[i].isMember("channel_1"))
+							{
+								status = params[i]["channel_1"].asString();
+								on = (status ==  "on")?true : false;
+								commit = true;
+								if (model == "ctrl_neutral2" || model == "ctrl_ln2" || model == "ctrl_ln2.aq1")
+								{
+									unitcode =  10;
+									name = "Xiaomi Wired Dual Wall Switch Channel 1";
+									TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, load_power, consumed, battery);
+									commit = false;
+								}
+							}
+							else if (params[i].isMember("load_power"))
+							{
+								load_power = params[i]["load_power"].asString();
+								commit = true;
+							}
+							else if (params[i].isMember("energy_consumed"))
+							{
+								consumed = params[i]["energy_consumed"].asString();
+								commit = true;
+							}
+						}
+						if (commit)
+						{
+							sleep_milliseconds(100);
+							level = 0;
+							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, load_power, consumed, battery);			
+						}
+					}
+						
+					/* 动作型 */
+					else if ((model == "switch") || (model == "remote.b1acn01") || 
+						model == "sensor_switch.aq2" ||
+						model == "sensor_switch.aq3" ||
+						model == "86sw1" || model == "remote.b186acn01" || model == "sensor_86sw1.aq1" ||
+						model == "86sw2" || model == "remote.b286acn01" || model == "sensor_86sw1.aq1")
+					{
+						type = STYPE_Selector;
 						int level = -1;
-						if (model == "switch") {
-							level = 0;
+						int channel = 0;
+						on = false;
+						
+						if (model == "switch" || model == "remote.b1acn01")
+						{
+							name = "Xiaomi Wireless Switch";
 						}
-						else if (model == "smoke" || model == "natgas" || model == "sensor_wleak.aq1" || model == "sensor_cube.aqgl01") {
-							if (battery != 255 && (model == "sensor_wleak.aq1" || model == "sensor_cube.aqgl01")) {
-								level = 0;
-							}
-							if ((alarm == "1") || (alarm == "2") || (status == "leak")) {
-								level = 0;
-								on = true;
-							}
-							else if ((alarm == "0") || (status == "no_leak") || (status == "iam")) {
-								level = 0;
-							}
-							if (density != "")
-								level = atoi(density.c_str());
+						else if (model == "sensor_switch.aq2")
+						{
+							name = "Xiaomi Square Wireless Switch";
 						}
-						if ((status == "motion") || (status == "open") || (status == "no_close") || (status == "on") || (no_close != "")) {
-							level = 0;
+						else if (model == "sensor_switch.aq3")
+						{
+							name = "Xiaomi Smart Push Button";
+						}
+						else if(model == "86sw1" || model == "sensor_86sw1.aq1" || model == "remote.b186acn01")
+						{
+							name = "Xiaomi Wireless Single Wall Switch";
+
+						}
+						else if (model == "86sw2" || model == "sensor_86sw2.aq1" || model == "remote.b286acn01")
+						{
+							name = "Xiaomi Wireless Dual Wall Switch";
+						}
+
+						for (int i = 0; i < (int)params.size(); i++)
+						{
+							
+							if(params[i].isMember("button_0"))
+							{
+								status = params[i]["button_0"].asString();
+							}
+							else if(params[i].isMember("button_1"))
+							{
+								status = params[i]["button_1"].asString();
+								channel = 1;
+							}
+							else if (params[i].isMember("dual_channel"))
+							{
+								status = params[i]["dual_channel"].asString();
+							}
+						} 
+
+						if (status == "click")
+						{
+							level = (channel == 0)? 10:30;
 							on = true;
 						}
-						else if ((status == "no_motion") || (status == "close") || (status == "off") || (no_motion != "")) {
-							level = 0;
-							on = false;
-						}
-						else if ((status == "click") || (status == "flip90") || (aqara_wireless1 == "click") || (status == "tilt")) {
-							level = 10;
+						else if (status == "double_click")
+						{
+							level = (channel == 0)? 20:40;
 							on = true;
 						}
-						else if ((status == "double_click") || (status == "flip180") || (aqara_wireless2 == "click") || (status == "shake") || (status == "vibrate")) {
-							level = 20;
-							on = true;
-						}
-						else if ((status == "long_click_press") || (status == "move") || (aqara_wireless3 == "both_click") ) {
+						else if (status == "shake")
+						{
 							level = 30;
 							on = true;
 						}
-						else if ((status == "tap_twice") || (status == "long_click_release") || (aqara_wireless1 == "double_click")) {
-							level = 40;
-							on = true;
-						}
-						else if ((status == "shake_air") || (aqara_wireless2 == "double_click")) {
+						else if (status == "both_click")
+						{
 							level = 50;
 							on = true;
 						}
-						else if ((status == "swing") || (aqara_wireless3 == "double_both_click")) {
-							level = 60;
-							on = true;
-						}
-						else if ((status == "alert") || (aqara_wireless1 == "long_click")) {
-							level = 70;
-							on = true;
-						}
-						else if ((status == "free_fall") || (aqara_wireless2 == "long_click")) {
-							level = 80;
-							on = true;
-						}
-						else if (aqara_wireless3 == "long_both_click") {
-							level = 90;
-							on = true;
-						}
-						std::string rotate = root2["rotate"].asString();
-						if (rotate != "") {
-							int amount = atoi(rotate.c_str());
-							if (amount > 0) {
-								level = 90;
-							}
-							else {
-								level = 100;
-							}
-							on = true;
-							TrueGateway->InsertUpdateCubeText(sid.c_str(), name, rotate.c_str());
+						if (on)
+						{
 							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
 						}
-						else {
-							if (model == "plug" || model == "86plug" || model == "ctrl_86plug.aq1") {
-								sleep_milliseconds(100); //need to sleep here as the gateway will send 2 update messages, and need time for the database to update the state so that the event is not triggered twice
-								TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, load_power, power_consumed, battery);
-							}
-							else if ((model == "curtain") && (curtain != "")) {
-								level = atoi(curtain.c_str());
-								TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
-							}
-							else {
-								if (level > -1) { //this should stop false updates when empty 'data' is received
-									TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
-								}
-								if (lux != "") {
-									TrueGateway->InsertUpdateLux(sid.c_str(), name, atoi(lux.c_str()), battery);
-								}
-								if (voltage != "" && m_IncludeVoltage) {
-									TrueGateway->InsertUpdateVoltage(sid.c_str(), name, atoi(voltage.c_str()));
-								}
-							}
-						}
 					}
-					else if ((name == "Xiaomi Wired Dual Wall Switch") || (name == "Xiaomi Wired Single Wall Switch"))
+					/* 动作型 */
+					else if (model == "cube" || model == "sensor_cube.aqgl01") 
 					{
-						//aqara wired dual switch, bidirectional communiction support
-						type = STYPE_OnOff;
-						std::string aqara_wired1 = root2["channel_0"].asString();
-						std::string aqara_wired2 = root2["channel_1"].asString();
-						bool state = false;
-						if ((aqara_wired1 == "on") || (aqara_wired2 == "on")) {
-							state = true;
+						if (model == "cube")
+						{
+							name = "Xiaomi Cube";
 						}
-						unitcode = 8;
-						if (name == "Xiaomi Wired Single Wall Switch") {
-							unitcode = 8;
+						else if (model == "sensor_cube.aqgl01")
+						{
+							name = "Aqara Cube";
 						}
-						else {
-							unitcode = 9;
-							name = "Xiaomi Wired Dual Wall Switch Channel 0";
-						}
-						if (aqara_wired1 != "") {
-							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, state, type, unitcode, 0, cmd, "", "", battery);
-						}
-						else if (aqara_wired2 != "") {
-							unitcode = 10;
-							name = "Xiaomi Wired Dual Wall Switch Channel 1";
-							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, state, type, unitcode, 0, cmd, "", "", battery);
-						}
-					}
-					else if ((name == "Xiaomi Temperature/Humidity") || (name == "Xiaomi Aqara Weather"))
-					{
-						std::string temperature = root2["temperature"].asString();
-						std::string humidity = root2["humidity"].asString();
-						float pressure = 0;
+						
+						type = STYPE_Selector;
+						std::string rdegree = "";
+						std::string  rtime = "";
+						commit = false;
 
-						if (name == "Xiaomi Aqara Weather") {
-							std::string szPressure = root2["pressure"].asString();
-							pressure = static_cast<float>(atof(szPressure.c_str())) / 100.0f;
+						for (int i = 0; i < (int)params.size(); i++)
+						{							
+							if(params[i].isMember("cube_status"))
+							{
+								status = params[i]["cube_status"].asString();
+								commit = true;
+							}
+							else if(params[i].isMember("rotate_degree"))
+							{
+								rdegree = params[i]["rotate_degree"].asString();
+								commit = true;
+							}
+							else if (params[i].isMember("detect_time"))
+							{
+								rtime = params[i]["detect_time"].asString();
+								commit = true;
+							}
 						}
 
-						if ((!temperature.empty()) && (!humidity.empty()) && (pressure != 0))
+						if (status == "flip90")
 						{
-							//Temp+Hum+Baro
-							float temp = (float)atof(temperature.c_str()) / 100.0f;
-							int hum = atoi(humidity.c_str()) / 100;
-							TrueGateway->InsertUpdateTempHumPressure(sid.c_str(), "Xiaomi TempHumBaro", temp, hum, pressure, battery);
+							level = 10;
+							
 						}
-						else if ((!temperature.empty()) && (!humidity.empty()))
+						else if (status == "flip180")
 						{
-							//Temp+Hum
-							float temp = (float)atof(temperature.c_str()) / 100.0f;
-							int hum = atoi(humidity.c_str()) / 100;
-							TrueGateway->InsertUpdateTempHum(sid.c_str(), "Xiaomi TempHum", temp, hum, battery);
+							level = 20;
 						}
-						else if (temperature != "") {
-							float temp = (float)atof(temperature.c_str()) / 100.0f;
-							if (temp < 99) {
-								TrueGateway->InsertUpdateTemperature(sid.c_str(), "Xiaomi Temperature", temp, battery);
+						else if (status == "move")
+						{
+							level = 30;
+						}
+						else if (status == "tap_twice")
+						{
+							level = 40;
+						}
+						else if (status == "shake_air")
+						{
+							level = 50;
+						}
+						else if (status == "swing")
+						{
+							level = 60;
+						}
+						else if (status == "alert")
+						{
+							level = 70;
+						}
+						else if (status == "free_fall")
+						{
+							level = 80;
+						}
+						else if (status == "rotate")
+						{
+							level = 90;
+						}
+						if (level > 0)
+						{
+							on = true;
+							status = status +"  "+ rdegree +"degree in "+ rtime +"ms";
+							TrueGateway->InsertUpdateCubeText(sid.c_str(), name, status.c_str());
+							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
+						}
+						
+						
+					}
+					/* 动作型 */
+					else if (model == "vibration" || model == "vibration.aq1")
+					{
+						name = "Aqara Vibration Sensor";
+						type = STYPE_Selector;
+						for (int i = 0; i < (int)params.size(); i++)
+						{
+							if(params[i].isMember("vibration_status"))
+							{
+								status = params[i]["vibration_status"].asString();
+								commit = true;
 							}
 						}
-						else if (humidity != "") {
-							int hum = atoi(humidity.c_str()) / 100;
-							if (hum > 1) {
-								TrueGateway->InsertUpdateHumidity(sid.c_str(), "Xiaomi Humidity", hum, battery);
-							}
+						if (status == "tilt")
+						{
+							level = 10;
+							on = true;
+						}
+						else if (status == "vibrate")
+						{
+							level = 20;
+							on = true;
+						}
+						else if (status == "free_fall")
+						{
+							level = 30;
+							on = true;
+						}
+						if (commit)
+						{
+							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
 						}
 					}
-					else if (name == "Xiaomi RGB Gateway")
+					else if (model == "smoke" || model == "natgas" || 
+							model == "sensor_wleak.aq1") 
 					{
+
+						if (model == "smoke")
+						{
+							name = "Xiaomi Smoke Detector";
+						}
+						else if (model == "natgas")
+						{
+							name = "Xiaomi Gas Detector";
+						}
+						else if (model == "sensor_wleak.aq1")
+						{
+							name = "Xiaomi Water Leak Detector";
+						}
+						
+						type = STYPE_SMOKEDETECTOR;
+
+						for (int i = 0; i < (int)params.size(); i++)
+						{							
+							if(params[i].isMember("wleak_status"))
+							{
+								status = params[i]["wleak_status"].asString();
+								commit = true;
+							}
+							else if(params[i].isMember("natgas_status"))
+							{
+								status = params[i]["natgas_status"].asString();
+								commit = true;
+							}
+							else if (params[i].isMember("smoke_status"))
+							{
+								status = params[i]["smoke_status"].asString();
+								commit = true;
+							}
+						}
+						if (status == "leak")
+						{
+							unitcode = 1;
+							level = 0;
+							on = true;
+						}
+
+						if (commit)
+						{
+							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
+						}
+
+					}
+					else if (model == "curtain") 
+					{
+						name = "Xiaomi Curtain";
+						type = STYPE_BlindsPercentage;
+
+						on = false;
+						std::string curtain_level = ""; 
+						for (int i = 0; i < (int)params.size(); i++)
+						{							
+							if(params[i].isMember("curtain_status"))
+							{
+								status = params[i]["curtain_status"].asString();
+								commit = true;
+							}
+							else if(params[i].isMember("curtain_level"))
+							{
+								curtain_level = params[i]["curtain_level"].asString();
+								commit = true;
+							}
+						}
+				
+						if(status == "open" )
+						{
+							on = true;
+						}
+						if (commit)
+						{
+							level = atoi(curtain_level.c_str());
+							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
+						}
+
+					}
+					else if (model == "gateway" || model == "gateway.v3" || model == "acpartner.v3") 
+					{
+						name = "Xiaomi RGB Gateway";
+
 						std::string rgb = root2["rgb"].asString();
 						std::string illumination = root2["illumination"].asString();
+
+						
 						if (rgb != "") {
 							// Only add in the gateway that matches the SID for this hardware.
 							//if (m_XiaomiGateway->m_GatewaySID == sid) {
@@ -1342,7 +1612,8 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 								
 							}
 						}
-						else {
+						else 
+						{
 							//check for token
 							std::string token = root["token"].asString();
 							std::string ip = root2["ip"].asString();
@@ -1357,17 +1628,28 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 					{
 						_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): unhandled model: %s, name: %s", TrueGateway->GetGatewayHardwareID(), model.c_str(), name.c_str());
 					}
+
+#if 0				
+					if (str_battery != "" && name != "" && sid != "" && m_IncludeVoltage) {
+						TrueGateway->InsertUpdateVoltage(sid.c_str(), name, atoi(str_battery.c_str()));
+					}
+#endif
+					_log.Log(LOG_STATUS,  "type:%d name:%s", type, name.c_str());
 				}
 			}
-			else if (cmd == "get_id_list_ack")
+			else if (cmd == xiaomi::rsp_discorey)
 			{
-				Json::Value root2;
-				ret = ParseJSon(data.c_str(), root2);
+				//Json::Value root2;
+				//ret = ParseJSon(params.c_str(), root2);
+				Json::Value root2 = root["dev_list"];
+				std::string sid; 
 				if ((ret) || (!root2.isObject()))
 				{
 					for (int i = 0; i < (int)root2.size(); i++) {
+						sid = root2[i]["sid"].asString();
 						std::string message = "{\"cmd\" : \"read\",\"sid\":\"";
-						message.append(root2[i].asString().c_str());
+						//message.append(root2[i].asString().c_str());
+						message.append(sid.c_str());
 						message.append("\"}");
 						std::shared_ptr<std::string> message1(new std::string(message));
 						boost::asio::ip::udp::endpoint remote_endpoint;
@@ -1377,9 +1659,9 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 				}
 				showmessage = false;
 			}
-			else if (cmd == "iam")
+			else if (cmd == xiaomi::rsp_whois)
 			{
-				if (model == "gateway" || model == "gateway.v3" || model == "acpartner.v3")
+				if (model == "gateway" || model == "gateway.v3" || model == "acpartner.v3" || model == "gateway.aq1")
 				{
 					std::string ip = root["ip"].asString();
 					// Only add in the gateway that matches the IP address for this hardware.
@@ -1387,15 +1669,15 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 					{
 						_log.Log(LOG_STATUS, "XiaomiGateway: RGB Gateway Detected");
 						TrueGateway->InsertUpdateRGBGateway(sid.c_str(), "Xiaomi RGB Gateway (" + ip + ")", false, 0, 100);
-						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Ringtone", false, STYPE_Selector, 3, 0, cmd, "", "", 255);
-						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Clock", false, STYPE_Selector, 4, 0, cmd, "", "", 255);
-						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Doorbell", false, STYPE_Selector, 5, 0, cmd, "", "", 255);
-						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway MP3", false, STYPE_OnOff, 6, 0, cmd, "", "", 255);
-						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Volume", false, STYPE_Dimmer, 7, 0, cmd, "", "", 255);
+						//TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Ringtone", false, STYPE_Selector, 3, 0, cmd, "", "", 255);
+						//TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Clock", false, STYPE_Selector, 4, 0, cmd, "", "", 255);
+						//TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Doorbell", false, STYPE_Selector, 5, 0, cmd, "", "", 255);
+						//TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway MP3", false, STYPE_OnOff, 6, 0, cmd, "", "", 255);
+						//TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Volume", false, STYPE_Dimmer, 7, 0, cmd, "", "", 255);
 						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Join Button", false, STYPE_OnOff, 254, 0, cmd, "", "", 255);
 
 						//query for list of devices
-						std::string message = "{\"cmd\" : \"get_id_list\"}";
+						std::string message = "{\"cmd\" : \"discovery\"}";
 						std::shared_ptr<std::string> message2(new std::string(message));
 						boost::asio::ip::udp::endpoint remote_endpoint;
 						remote_endpoint = boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(TrueGateway->GetGatewayIp().c_str()), 9898);
