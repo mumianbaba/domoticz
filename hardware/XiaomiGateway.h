@@ -29,6 +29,8 @@ private:
 
 	bool SendMessageToGateway(const std::string &controlmessage);
 	void InsertUpdateSwitch(const std::string &nodeid, const std::string &Name, const bool bIsOn, const _eSwitchType switchtype, const int unittype, const int level, const std::string &messagetype, const std::string &load_power, const std::string &power_consumed, const int battery);
+	void InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const std::string& Hex, const std::string& Brightness, const bool bIsWhite, const int battery);
+
 	void InsertUpdateRGBGateway(const std::string &nodeid, const std::string &Name, const bool bIsOn, const int brightness, const int hue);
 	void InsertUpdateCubeText(const std::string &nodeid, const std::string &Name, const std::string &degrees);
 	void InsertUpdateVoltage(const std::string &nodeid, const std::string &Name, const int VoltageLevel);
@@ -52,6 +54,9 @@ private:
 	uint8_t m_GatewayRgbR;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
 	uint8_t m_GatewayRgbG;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
 	uint8_t m_GatewayRgbB;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
+	uint8_t m_GatewayRgbCW;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
+	uint8_t m_GatewayRgbWW;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
+	uint8_t m_GatewayRgbCT;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
 	uint8_t m_GatewayBrightnessInt; //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
 	std::string m_GatewaySID;
 	std::string m_GatewayIp;

@@ -725,6 +725,209 @@ void CDomoticzHardwareBase::SendBlindSensor(const uint8_t NodeID, const uint8_t 
 	sDecodeRXMessage(this, (const unsigned char*)& lcmd.BLINDS1, defaultname.c_str(), BatteryLevel);
 }
 
+
+void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const std::string& ColorJson, const std::string& Brightness, const int BatteryLevel, const std::string& defaultname)
+{
+	uint8_t subType = SubType;
+	if (SubType < sTypeColor_RGB_W || SubType > sTypeColor_CW_WW)
+	{
+		subType = sTypeColor_RGB_W;
+	}
+
+	uint8_t r = 0;
+	uint8_t g = 0;
+	uint8_t b = 0;
+	uint8_t cw = 0;
+	uint8_t ww = 0;
+	_tColor color;
+	int   ival = 100;
+	float brightnessAdj = 1.0f;
+
+
+	if (!Brightness.empty())
+	{
+		ival = atoi(Brightness.c_str());
+	}
+
+	color = _tColor(ColorJson);
+	if (color.mode == ColorModeRGB)
+	{
+		// Normalize RGB to full brightness
+		float hsb[3];
+		int r, g, b;
+		rgb2hsb(color.r, color.g, color.b, hsb);
+		hsb2rgb(hsb[0]*360.0f, hsb[1], 1.0f, r, g, b, 255);
+		color.r = r;
+		color.g = g;
+		color.b = b;
+		brightnessAdj = hsb[2];
+	}
+
+	_log.Debug(DEBUG_WEBSERVER, "setcolbrightnessvalue: rgbww: %02x%02x%02x%02x%02x, color: '%s'", r, g, b, cw, ww, color.toString().c_str());
+
+	ival = int(ival * brightnessAdj);
+	ival = std::max(ival, 0);
+	ival = std::min(ival, 100);
+
+	//Send as ColorSwitch
+	_tColorSwitch lcmd;
+	lcmd.id = NodeID;
+	lcmd.dunit = ChildID;
+	lcmd.subtype = subType;
+	lcmd.value = ival;
+	lcmd.command = Color_SetColor;
+	if (ival <= 0)
+		lcmd.command = Color_LedOff;
+	else
+		lcmd.command = Color_SetColor;
+	lcmd.color = color;
+	sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
+}
+
+
+
+void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const std::string& Hex, const std::string& Brightness, const bool bIsWhite, const int BatteryLevel, const std::string& defaultname)
+{
+	uint8_t subType = SubType;
+	if (SubType < sTypeColor_RGB_W || SubType > sTypeColor_CW_WW)
+	{
+		subType = sTypeColor_RGB_W;
+	}
+
+	uint64_t ihex = hexstrtoui64(Hex);
+	uint8_t r = 0;
+	uint8_t g = 0;
+	uint8_t b = 0;
+	uint8_t cw = 0;
+	uint8_t ww = 0;
+	_tColor color;
+	int   ival = 100;
+	float brightnessAdj = 1.0f;
+
+	bool bisWhite = bIsWhite;
+
+	if (!Brightness.empty())
+	{
+		ival = atoi(Brightness.c_str());
+	}
+
+	switch (Hex.length())
+	{
+		case 6: //RGB
+			r = (uint8_t)((ihex & 0x0000FF0000) >> 16);
+			g = (uint8_t)((ihex & 0x000000FF00) >> 8);
+			b = (uint8_t)ihex & 0xFF;
+			float hsb[3];
+			int tr, tg, tb; // tmp of 'int' type so can be passed as references to hsb2rgb
+			rgb2hsb(r, g, b, hsb);
+			// Normalize RGB to full brightness
+			hsb2rgb(hsb[0]*360.0f, hsb[1], 1.0f, tr, tg, tb, 255);
+			r = tr;
+			g = tg;
+			b = tb;
+			brightnessAdj = hsb[2];
+			// Backwards compatibility: set iswhite for unsaturated colors
+			bisWhite = (hsb[1] < (20.0 / 255.0)) ? true : false;
+			color = _tColor(r, g, b, cw, ww, ColorModeRGB);
+			break;
+		case 8: //RGB_WW
+			r = (uint8_t)((ihex & 0x00FF000000) >> 24);
+			g = (uint8_t)((ihex & 0x0000FF0000) >> 16);
+			b = (uint8_t)((ihex & 0x000000FF00) >> 8);
+			ww = (uint8_t)ihex & 0xFF;
+			color = _tColor(r, g, b, cw, ww, ColorModeCustom);
+			break;
+		case 10: //RGB_CW_WW
+			r = (uint8_t)((ihex & 0xFF00000000) >> 32);
+			g = (uint8_t)((ihex & 0x00FF000000) >> 24);
+			b = (uint8_t)((ihex & 0x0000FF0000) >> 16);
+			cw = (uint8_t)((ihex & 0x000000FF00) >> 8);
+			ww = (uint8_t)ihex & 0xFF;
+			color = _tColor(r, g, b, cw, ww, ColorModeCustom);
+			break;
+	}
+	if (bisWhite == true)
+	{
+		color.mode = ColorModeWhite;
+	}
+	_log.Debug(DEBUG_WEBSERVER, "setcolbrightnessvalue: rgbww: %02x%02x%02x%02x%02x, color: '%s'", r, g, b, cw, ww, color.toString().c_str());
+
+	ival = int(ival * brightnessAdj);
+	ival = std::max(ival, 0);
+	ival = std::min(ival, 100);
+
+	//Send as ColorSwitch
+	_tColorSwitch lcmd;
+	lcmd.id = NodeID;
+	lcmd.dunit = ChildID;
+	lcmd.subtype = subType;
+	lcmd.value = ival;
+	lcmd.command = Color_SetColor;
+	if (ival <= 0)
+		lcmd.command = Color_LedOff;
+	else
+		lcmd.command = Color_SetColor;
+	lcmd.color = color;
+	sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
+}
+
+
+void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const std::string& Hue, const std::string& Sat, const std::string& Brightness, const bool bIsWhite, const int BatteryLevel, const std::string& defaultname)
+{
+	uint8_t subType = SubType;
+	if (SubType < sTypeColor_RGB_W || SubType > sTypeColor_CW_WW)
+	{
+		subType = sTypeColor_RGB_W;
+	}
+
+	int r, g, b;
+
+	//convert hue to RGB
+	_tColor color;
+	float iHue = float(atof(Hue.c_str()));
+	float iSat = 100.0f;
+	int   ival = 100;
+	float brightnessAdj = 1.0f;
+
+	if (!Sat.empty())
+	{
+		iSat = float(atof(Sat.c_str()));
+	}
+	if (!Brightness.empty())
+	{
+		ival = atoi(Brightness.c_str());
+	}
+
+	ival = int(ival * brightnessAdj);
+	ival = std::max(ival, 0);
+	ival = std::min(ival, 100);
+
+	/* no cw ww */
+	hsb2rgb(iHue, iSat/100.0f, 1.0f, r, g, b, 255);
+	color = _tColor(r, g, b, 0, 0, ColorModeRGB);
+	if (bIsWhite)
+	{
+		color.mode = ColorModeWhite;
+	}
+	_log.Debug(DEBUG_WEBSERVER, "SendRGBWSwitch: hue: %f, rgb: %02x%02x%02x, color: '%s'", iHue, r, g, b, color.toString().c_str());
+
+
+	//Send as ColorSwitch
+	_tColorSwitch lcmd;
+	lcmd.id = NodeID;
+	lcmd.subtype = subType;
+	lcmd.value = ival;
+	lcmd.command = Color_SetColor;
+	if (ival <= 0)
+		lcmd.command = Color_LedOff;
+	else
+		lcmd.command = Color_SetColor;
+	lcmd.dunit = ChildID;
+	lcmd.color = color;
+	sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
+}
+
+
 void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const int Level, const bool bIsRGBW, const std::string& defaultname)
 {
 	int level = int(Level);

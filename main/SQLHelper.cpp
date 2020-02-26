@@ -4351,8 +4351,14 @@ uint64_t CSQLHelper::UpdateValueInt(const int HardwareID, const char* ID, const 
 	result = safe_query("SELECT ID,Name, Used, SwitchType, nValue, sValue, LastUpdate, Options FROM DeviceStatus WHERE (HardwareID=%d AND DeviceID='%q' AND Unit=%d AND Type=%d AND SubType=%d)", HardwareID, ID, unit, devType, subType);
 	if (result.empty())
 	{
+		 int switchType = 0;
+
+		if (devType == pTypeColorSwitch)
+		{
+			switchType = STYPE_Dimmer;
+		}
 		//Insert
-		ulID = InsertDevice(HardwareID, ID, unit, devType, subType, 0, nValue, sValue, devname, signallevel, batterylevel);
+		ulID = InsertDevice(HardwareID, ID, unit, devType, subType, switchType, nValue, sValue, devname, signallevel, batterylevel);
 
 		if (ulID < 1)
 			return -1;

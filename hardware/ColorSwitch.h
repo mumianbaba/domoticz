@@ -56,7 +56,7 @@ struct _tColorSwitch {
 	uint8_t len;
 	uint8_t type;
 	uint8_t subtype;
-	uint32_t id;
+	uint64_t id;
 	uint8_t dunit; //0=All, 1=Group1,2=Group2,3=Group3,4=Group4, 5=IboxLed
 	uint8_t command;
 	uint32_t value;  // Value of command
