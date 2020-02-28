@@ -270,7 +270,7 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 		}
 
 		if (xcmd->unitcode == 8 || xcmd->unitcode == 9 || xcmd->unitcode == 10) {
-			message = "{\"cmd\":\"write\",\"model\":\"" + cmddevice + "\",\"sid\":\"158d00" + sid + "\",\"key\":\"@gatewaykey\",\"params\":[{" + cmdchannel + cmdcommand + "}]}";
+			message = "{\"cmd\":\"write\",\"model\":\"" + cmddevice + "\",\"sid\":\"00158d00" + sid + "\",\"key\":\"@gatewaykey\",\"params\":[{" + cmdchannel + cmdcommand + "}]}";
 		}
 		else if ((xcmd->subtype == sSwitchGeneralSwitch) && (xcmd->unitcode == 1)) {
 			std::string command = "on";
@@ -285,7 +285,7 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 				_log.Log(LOG_ERROR, "XiaomiGateway: Unknown command %d", xcmd->cmnd);
 				break;
 			}
-			message = "{\"cmd\":\"write\",\"model\":\"plug\",\"sid\":\"158d00" + sid + "\",\"key\":\"@gatewaykey\",\"params\":[{\"channel_0\":\"" +command+ "\"}]}";
+			message = "{\"cmd\":\"write\",\"model\":\"plug\",\"sid\":\"00158d00" + sid + "\",\"key\":\"@gatewaykey\",\"params\":[{\"channel_0\":\"" +command+ "\"}]}";
 		}
 		else if ((xcmd->subtype == sSwitchTypeSelector) && (xcmd->unitcode >= 3 && xcmd->unitcode <= 5) || (xcmd->subtype == sSwitchGeneralSwitch) && (xcmd->unitcode == 6)) {
 			std::stringstream ss;
@@ -330,14 +330,14 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 			message = "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"" + m_GatewaySID + "\",\"key\":\"@gatewaykey\",\"params\":[{\"mid\":"+ m_GatewayMusicId.c_str() + "},{\"vol\":" + m_GatewayVolume.c_str() + "}]}";
 		}
 		else if (xcmd->subtype == sSwitchGeneralSwitch && xcmd->unitcode == 254){
-			message = "{\"cmd\":\"write\",\"model\":\"plug\",\"sid\":\"158d00" + sid + "\",\"key\":\"@gatewaykey\",\"params\":[{\"join_permission\":\"yes\"}]}";
+			message = "{\"cmd\":\"write\",\"model\":\"plug\",\"sid\":\"00158d00" + sid + "\",\"key\":\"@gatewaykey\",\"params\":[{\"join_permission\":\"yes\"}]}";
 		}
 		else if (xcmd->subtype == sSwitchBlindsT2) {
 			int level = xcmd->level;
 			if (xcmd->cmnd == 1) {
 				level = 100;
 			}
-			message = "{\"cmd\":\"write\",\"model\":\"curtain\",\"sid\":\"158d00" + sid + "\",\"key\":\"@gatewaykey\",\"params\":[{\"curtain_level\":" +std::to_string(level) + "}] }";
+			message = "{\"cmd\":\"write\",\"model\":\"curtain\",\"sid\":\"00158d00" + sid + "\",\"key\":\"@gatewaykey\",\"params\":[{\"curtain_level\":" +std::to_string(level) + "}] }";
 		}
 	}
 	else if (packettype == pTypeColorSwitch) {
@@ -362,12 +362,12 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 			m_GatewayRgbCT = 0;
 			uint32_t value = (m_GatewayBrightnessInt << 24) | (m_GatewayRgbR << 16) | (m_GatewayRgbG << 8) | (m_GatewayRgbB);
 			uint32_t cwww = m_GatewayRgbCW << 8 | m_GatewayRgbWW;
-			ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_rgb\":"<<value<<"},{\"light_cwww\":"<<cwww<<"},{\"light_ct\":"<<(int)m_GatewayRgbCT<<"}]}";
+			ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"00158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_rgb\":"<<value<<"},{\"light_cwww\":"<<cwww<<"},{\"light_ct\":"<<(int)m_GatewayRgbCT<<"}]}";
 			message = ss.str();
 		}
 		else if (xcmd->command == Color_LedOff) {
 			m_GatewayBrightnessInt = 0;
-			ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_rgb\": 0}]}";
+			ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"00158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_rgb\": 0}]}";
 			message = ss.str();
 		}
 		else if (xcmd->command == Color_SetColor) {
@@ -379,7 +379,7 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 				m_GatewayRgbB = 0xff;
 				m_GatewayBrightnessInt = xcmd->value;
 				uint32_t value = (m_GatewayBrightnessInt << 24) | (m_GatewayRgbR << 16) | (m_GatewayRgbG << 8) | (m_GatewayRgbB);
-				ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_rgb\":"<<value<<"}]}";
+				ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"00158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_rgb\":"<<value<<"}]}";
 				message = ss.str();
 
 			}
@@ -389,7 +389,7 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 				m_GatewayRgbWW = xcmd->color.ww;
 				m_GatewayRgbCT = xcmd->color.t;
 				uint32_t cwww = m_GatewayRgbCW << 8 | m_GatewayRgbWW;
-				ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_cwww\":"<<cwww<<"}, {\"light_temp\":"<<(int)m_GatewayRgbCT<<"}]}";
+				ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"00158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_cwww\":"<<cwww<<"}, {\"light_temp\":"<<(int)m_GatewayRgbCT<<"}]}";
 				message = ss.str();
 			}
 			else if (xcmd->color.mode == ColorModeRGB)
@@ -401,7 +401,7 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 
 				uint32_t value = (m_GatewayBrightnessInt << 24) | (m_GatewayRgbR << 16) | (m_GatewayRgbG << 8) | (m_GatewayRgbB);
 
-				ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_rgb\":"<<value<<"}]}";
+				ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"00158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_rgb\":"<<value<<"}]}";
 				message = ss.str();
 			}
 			else if (xcmd->color.mode == ColorModeCustom)
@@ -416,7 +416,7 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 
 				uint32_t value = (m_GatewayBrightnessInt << 24) | (m_GatewayRgbR << 16) | (m_GatewayRgbG << 8) | (m_GatewayRgbB);
 				uint32_t cwww = m_GatewayRgbCW << 8 | m_GatewayRgbWW;
-				ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_rgb\":"<<value<<"},{\"light_cwww\":"<<cwww<<"},{\"light_ct\":"<<(int)m_GatewayRgbCT<<"}]}";
+				ss << "{\"cmd\":\"write\",\"model\":\"gateway\",\"sid\":\"00158d00" << sid << "\",\"key\":\"@gatewaykey\", \"params\":[{\"light_rgb\":"<<value<<"},{\"light_cwww\":"<<cwww<<"},{\"light_ct\":"<<(int)m_GatewayRgbCT<<"}]}";
 				message = ss.str();
 			}
 			else
@@ -723,20 +723,20 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Click|Double Click|Long Click|Shake", false));
 				}
 				else if (Name == "Xiaomi Cube") {
-					// flip90/flip180/move/tap_twice/shake_air/swing/alert/free_fall
-					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|flip90|flip180|move|tap_twice|shake_air|swing|alert|free_fall|clock_wise|anti_clock_wise", false));
+					// flip90/flip180/move/tap_twice/shake/swing/alert/free_fall
+					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|flip90|flip180|move|tap_twice|shake|swing|alert|free_fall|clock_wise|anti_clock_wise", false));
 				}
 				else if (Name == "Aqara Cube") {
-					// flip90/flip180/move/tap_twice/shake_air/swing/alert/free_fall/rotate
-					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|flip90|flip180|move|tap_twice|shake_air|swing|alert|free_fall|rotate", false));
+					// flip90/flip180/move/tap_twice/shake/swing/alert/free_fall/rotate
+					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|flip90|flip180|move|tap_twice|shake|swing|alert|free_fall|rotate", false));
 				}
 				else if (Name == "Aqara Vibration Sensor") {
 					// tilt/vibrate/free fall
-					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Tilt|Vibrate|Free Fall", false));
+					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|touch|tilt|drop|angle", false));
 				}
 				else if (Name == "Xiaomi Wireless Dual Wall Switch") {
 					//for Aqara wireless switch, 2 buttons support
-					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Switch 1|Switch 1 Double Click|Switch 2|Switch 2 Double Click|Both Click", false));
+					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|S1|S1 Double Click|S1 Long Click|S2|S2 Double Click|S2 Long Click|Both Click|Both Double Click|Both Long Click", false));
 				}
 				else if (Name == "Xiaomi Wired Single Wall Switch") {
 					//for Aqara wired switch, single button support
@@ -744,7 +744,7 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 				}
 				else if (Name == "Xiaomi Wireless Single Wall Switch") {
 					//for Aqara wireless switch, single button support
-					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Click|Double Click", false));
+					m_sql.SetDeviceOptions(atoi(Idx.c_str()), m_sql.BuildDeviceOptions("SelectorStyle:0;LevelNames:Off|Click|Double Click|Long Click", false));
 				}
 				else if (Name == "Xiaomi Gateway Alarm Ringtone") {
 					//for the Gateway Audio
@@ -1002,25 +1002,15 @@ std::string XiaomiGateway::GetGatewayKey()
 #endif
 }
 
-unsigned int XiaomiGateway::GetShortID(const std::string & nodeid)
+uint64_t XiaomiGateway::GetShortID(const std::string & nodeid)
 {
+
 	if (nodeid.length() < 12) {
 		_log.Log(LOG_ERROR, "XiaomiGateway: Node ID %s is too short", nodeid.c_str());
 		return -1;
 	}
-	std::string str;
-	if (nodeid.length() < 14) {
-		//gateway
-		str = nodeid.substr(4, 8);
-	}
-	else {
-		//device
-		str = nodeid.substr(6, 8);
-	}
-	unsigned int sID;
-	std::stringstream ss;
-	ss << std::hex << str.c_str();
-	ss >> sID;
+	uint64_t sID = std::strtoull(nodeid.c_str(), NULL, 16);
+	std::cout<<"nodeid"<<nodeid<<"-----sID"<<sID<<std::endl;
 	return sID;
 }
 
@@ -1268,7 +1258,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						}
 					}
 					/* 状态型 */
-					else if (model == "plug" ||
+					else if (model == "plug" || model == "plug.maeu01" ||
 							model == "86plug" || model == "ctrl_86plug.aq1" ||
 							model == "ctrl_neutral1" || model == "ctrl_ln1" || model == "ctrl_ln1.aq1" ||
 							model == "ctrl_neutral2" || model == "ctrl_ln2" || model == "ctrl_ln2.aq1")
@@ -1278,7 +1268,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						std::string  consumed = "";
 						
 						type = STYPE_OnOff;
-						if (model == "plug")
+						if (model == "plug" || model == "plug.maeu01")
 						{
 							name = "Xiaomi Smart Plug";
 						}
@@ -1382,6 +1372,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 							name = "Xiaomi Wireless Dual Wall Switch";
 						}
 
+						std::string dual_chn = "";
 						for (int i = 0; i < (int)params.size(); i++)
 						{
 							
@@ -1396,30 +1387,46 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 							}
 							else if (params[i].isMember("dual_channel"))
 							{
-								status = params[i]["dual_channel"].asString();
+								dual_chn = params[i]["dual_channel"].asString();
 							}
-						} 
+						}
 
 						if (status == "click")
 						{
-							level = (channel == 0)? 10:30;
+							level = (channel == 0)? 10:40;
 							on = true;
 						}
 						else if (status == "double_click")
 						{
-							level = (channel == 0)? 20:40;
+							level = (channel == 0)? 20:50;
+							on = true;
+						}
+						else if (status == "long_click")
+						{
+							level = (channel == 0)?30:60;
 							on = true;
 						}
 						else if (status == "shake")
 						{
-							level = 30;
+							level = 40;
 							on = true;
 						}
-						else if (status == "both_click")
+						else if (dual_chn == "click")
 						{
-							level = 50;
+							level = 70;
 							on = true;
 						}
+						else if (dual_chn == "double_click")
+						{
+							level = 80;
+							on = true;
+						}
+						else if (dual_chn == "long_click")
+						{
+							level = 90;
+							on = true;
+						}
+
 						if (on)
 						{
 							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
@@ -1478,7 +1485,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						{
 							level = 40;
 						}
-						else if (status == "shake_air")
+						else if (status == "shake")
 						{
 							level = 50;
 						}
@@ -1505,39 +1512,54 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 							TrueGateway->InsertUpdateCubeText(sid.c_str(), name, status.c_str());
 							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
 						}
-						
-						
 					}
 					/* 动作型 */
 					else if (model == "vibration" || model == "vibration.aq1")
 					{
+						std::string angle = "";
 						name = "Aqara Vibration Sensor";
 						type = STYPE_Selector;
 						for (int i = 0; i < (int)params.size(); i++)
 						{
-							if(params[i].isMember("vibration_status"))
+							if(params[i].isMember("status"))
 							{
-								status = params[i]["vibration_status"].asString();
+								status = params[i]["status"].asString();
+								commit = true;
+							}
+							if(params[i].isMember("angle"))
+							{
+								angle = params[i]["angle"].asString();
 								commit = true;
 							}
 						}
-						if (status == "tilt")
+						if (status == "touch")
 						{
 							level = 10;
 							on = true;
 						}
-						else if (status == "vibrate")
+						else if (status == "tilt")
 						{
 							level = 20;
 							on = true;
 						}
-						else if (status == "free_fall")
+						else if (status == "drop")
 						{
 							level = 30;
 							on = true;
 						}
+						else if (angle != "")
+						{
+							level = 40;
+							on = true;
+						}
+
+						if (angle != "")
+						{
+							status = "angle : " + angle;
+						}
 						if (commit)
 						{
+							TrueGateway->InsertUpdateCubeText(sid.c_str(), name, status.c_str());
 							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
 						}
 					}
@@ -1706,12 +1728,12 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 									on = true;
 								}
 								TrueGateway->InsertUpdateRGBGateway(sid.c_str(), name + " (" + TrueGateway->GetGatewayIp() + ")", on, brightness, 0);
-								TrueGateway->InsertUpdateLux(sid.c_str(), "Xiaomi Gateway Lux", atoi(illumination.c_str()), 255);
-								TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Ringtone", false, STYPE_Selector, 3, 0, cmd, "", "", 255);
-								TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Clock", false, STYPE_Selector, 4, 0, cmd, "", "", 255);
-								TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Doorbell", false, STYPE_Selector, 5, 0, cmd, "", "", 255);
-								TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway MP3", false, STYPE_OnOff, 6, 0, cmd, "", "", 255);
-								TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Volume", false, STYPE_Dimmer, 7, 0, cmd, "", "", 255);
+								//TrueGateway->InsertUpdateLux(sid.c_str(), "Xiaomi Gateway Lux", atoi(illumination.c_str()), 255);
+								//TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Ringtone", false, STYPE_Selector, 3, 0, cmd, "", "", 255);
+								//TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Clock", false, STYPE_Selector, 4, 0, cmd, "", "", 255);
+								//TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Doorbell", false, STYPE_Selector, 5, 0, cmd, "", "", 255);
+								//TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway MP3", false, STYPE_OnOff, 6, 0, cmd, "", "", 255);
+								//TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Volume", false, STYPE_Dimmer, 7, 0, cmd, "", "", 255);
 								TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Join Button", false, STYPE_OnOff, 254, 0, cmd, "", "", 255);
 								
 							}

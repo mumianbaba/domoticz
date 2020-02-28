@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdint.h>
 #include "DomoticzHardware.h"
 #include <boost/tuple/tuple.hpp>
 #include <list>
@@ -43,7 +44,7 @@ private:
 	void InsertUpdateTempHum(const std::string &nodeid, const std::string &Name, const float Temperature, const int Humidity, const int battery);
 
 	std::string GetGatewayKey();
-	unsigned int GetShortID(const std::string & nodeid);
+	uint64_t GetShortID(const std::string & nodeid);
 
 	bool m_bDoRestart;
 	std::shared_ptr<std::thread> m_thread;
