@@ -51,6 +51,7 @@ const char *sqlCreateDeviceStatus =
 "[Type] INTEGER NOT NULL, "
 "[SubType] INTEGER NOT NULL, "
 "[SwitchType] INTEGER DEFAULT 0, "
+"[Mac] VARCHAR(64) DEFAULT Unknown, "
 "[Favorite] INTEGER DEFAULT 0, "
 "[SignalLevel] INTEGER DEFAULT 0, "
 "[BatteryLevel] INTEGER DEFAULT 0, "
@@ -751,7 +752,7 @@ bool CSQLHelper::OpenDatabase()
 	query(sqlCreateUserSessions);
 	query(sqlCreateMobileDevices);
 	//Add indexes to log tables
-	query("create index if not exists ds_hduts_idx    on DeviceStatus(HardwareID, DeviceID, Unit, Type, SubType);");
+	query("create index if not exists ds_hduts_idx    on DeviceStatus(HardwareID, DeviceID, Unit, Type, SubType, Mac);");
 	query("create index if not exists f_id_idx        on Fan(DeviceRowID);");
 	query("create index if not exists f_id_date_idx   on Fan(DeviceRowID, Date);");
 	query("create index if not exists fc_id_idx       on Fan_Calendar(DeviceRowID);");
@@ -1986,7 +1987,7 @@ bool CSQLHelper::OpenDatabase()
 			query("drop index if exists w_idx;");
 			query("drop index if exists wc_idx;");
 			// Add new indexes
-			query("create index if not exists ds_hduts_idx    on DeviceStatus(HardwareID, DeviceID, Unit, Type, SubType);");
+			query("create index if not exists ds_hduts_idx    on DeviceStatus(HardwareID, DeviceID, Unit, Type, SubType, Mac);");
 			query("create index if not exists f_id_idx        on Fan(DeviceRowID);");
 			query("create index if not exists f_id_date_idx   on Fan(DeviceRowID, Date);");
 			query("create index if not exists fc_id_idx       on Fan_Calendar(DeviceRowID);");
@@ -4303,14 +4304,15 @@ uint64_t CSQLHelper::InsertDevice(const int HardwareID, const char* ID, const un
 	{
 		name = "Unknown";
 	}
+	std::cout<<"DeviceID:"<<ID<<"    "<<"Unit:"<<unit<<std::endl;
 
 	safe_query(
-		"INSERT INTO DeviceStatus (HardwareID, DeviceID, Unit, Type, SubType, SwitchType, SignalLevel, BatteryLevel, nValue, sValue, Name) "
-		"VALUES ('%d','%q','%d','%d','%d','%d','%d','%d','%d','%q','%q')",
+		"INSERT INTO DeviceStatus (HardwareID, DeviceID, Unit, Type, SubType, SwitchType, SignalLevel, BatteryLevel, nValue, sValue, Name, Mac) "
+		"VALUES ('%d','%q','%d','%d','%d','%d','%d','%d','%d','%q','%q', '%q')",
 		HardwareID, ID, unit,
 		devType, subType, switchType,
 		signallevel, batterylevel,
-		nValue, sValue, name.c_str());
+		nValue, sValue, name.c_str(), "0");
 
 	//Get new ID
 	result = safe_query(

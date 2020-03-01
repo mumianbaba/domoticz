@@ -44,7 +44,11 @@ private:
 	void InsertUpdateTempHum(const std::string &nodeid, const std::string &Name, const float Temperature, const int Humidity, const int battery);
 
 	std::string GetGatewayKey();
-	uint64_t GetShortID(const std::string & nodeid);
+	unsigned int GetShortID(const std::string & nodeid);
+	
+	std::string GetMacByDeviceID(const std::string& deviceid);
+	void UpdateMac(const std::string &nodeid, const std::string& deviceid);
+	void UpdateMac(const std::string &nodeid, const std::string& format, uint64_t mask);
 
 	bool m_bDoRestart;
 	std::shared_ptr<std::thread> m_thread;
