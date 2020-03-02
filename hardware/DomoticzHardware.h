@@ -76,6 +76,8 @@ protected:
 	void HandleHBCounter(const int iInterval);
 
 	//Sensor Helpers
+	void SendDecodeRXMessage(const std::string& DeviceId, const int DeviceType,	const int DSubType,  const unsigned char* msg, const std::string& defaultname, const int BatteryLevel);
+
 	void SendTempSensor(const int NodeID, const int BatteryLevel, const float temperature, const std::string &defaultname, const int RssiLevel = 12);
 	void SendHumiditySensor(const int NodeID, const int BatteryLevel, const int humidity, const std::string &defaultname, const int RssiLevel = 12);
 	void SendBaroSensor(const int NodeID, const int ChildID, const int BatteryLevel, const float pressure, const int forecast, const std::string &defaultname);
@@ -95,7 +97,7 @@ protected:
 	void SendSwitch(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const bool bOn, const double Level, const std::string &defaultname, const int RssiLevel = 12);
 	void SendSwitchIfNotExists(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const bool bOn, const double Level, const std::string &defaultname);
 	void SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const std::string& ColorJson, const std::string& Brightness, const int BatteryLevel, const std::string& defaultname);
-	void SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const std::string& Hex, const std::string& Brightness, const bool bIsWhite, const int BatteryLevel, const std::string& defaultname);
+	void SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const std::string& Hex, const std::string& Brightness, const bool bIsWhite, const int Action, const int BatteryLevel, const std::string& defaultname);
 	void SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const std::string& Hue, const std::string& Sat, const std::string& Brightness, const bool bIsWhite, const int BatteryLevel, const std::string& defaultname);
 	void SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const int Level, const bool bIsRGBW, const std::string &defaultname);
 	void SendGeneralSwitch(const int NodeID, const int ChildID, const int BatteryLevel, const uint8_t SwitchState, const uint8_t Level, const std::string &defaultname, const int RssiLevel = 12);

@@ -4304,7 +4304,7 @@ uint64_t CSQLHelper::InsertDevice(const int HardwareID, const char* ID, const un
 	{
 		name = "Unknown";
 	}
-	std::cout<<"DeviceID:"<<ID<<"    "<<"Unit:"<<unit<<std::endl;
+	std::cout<<"DeviceID:"<<ID<<"    "<<"Unit:"<<(int)unit<<std::endl;
 
 	safe_query(
 		"INSERT INTO DeviceStatus (HardwareID, DeviceID, Unit, Type, SubType, SwitchType, SignalLevel, BatteryLevel, nValue, sValue, Name, Mac) "

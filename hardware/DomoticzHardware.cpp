@@ -158,6 +158,27 @@ void CDomoticzHardwareBase::Debug(const _eDebugLevel level, const char* logline,
 	va_end(argList);
 	_log.Debug(level, "%s: %s", m_ShortName.c_str(), cbuffer);
 }
+//
+void CDomoticzHardwareBase::SendDecodeRXMessage(const std::string& DeviceId, const int DeviceType,  const int DSubType,  const unsigned char* msg, const std::string& defaultname, const int BatteryLevel)
+{
+	if (!msg)
+	{
+		return;
+	}
+	std::vector<std::vector<std::string> > result;
+	result = m_sql.safe_query("SELECT Name FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q') AND (Type==%d) AND (Subtype==%d)",
+		m_HwdID, DeviceId.c_str(), DeviceType, DSubType);
+	bool bDoesExists = !result.empty();
+
+	if (bDoesExists)
+		sDecodeRXMessage(this, msg, defaultname.c_str(), BatteryLevel);
+	else
+	{
+		m_mainworker.PushAndWaitRxMessage(this, msg, defaultname.c_str(), BatteryLevel);
+	}
+
+}
+
 
 //Sensor Helpers
 void CDomoticzHardwareBase::SendTempSensor(const int NodeID, const int BatteryLevel, const float temperature, const std::string& defaultname, const int RssiLevel /* =12 */)
@@ -176,7 +197,11 @@ void CDomoticzHardwareBase::SendTempSensor(const int NodeID, const int BatteryLe
 	tsen.TEMP.temperatureh = (BYTE)(at10 / 256);
 	at10 -= (tsen.TEMP.temperatureh * 256);
 	tsen.TEMP.temperaturel = (BYTE)(at10);
-	sDecodeRXMessage(this, (const unsigned char*)& tsen.TEMP, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& tsen.TEMP, defaultname.c_str(), BatteryLevel);
+
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%d", NodeID & 0xffff);
+	SendDecodeRXMessage(devicid ,pTypeTEMP, sTypeTEMP5, (const unsigned char*)& tsen.TEMP, defaultname, BatteryLevel);
 }
 
 void CDomoticzHardwareBase::SendHumiditySensor(const int NodeID, const int BatteryLevel, const int humidity, const std::string& defaultname, const int RssiLevel /* =12 */)
@@ -192,7 +217,10 @@ void CDomoticzHardwareBase::SendHumiditySensor(const int NodeID, const int Batte
 	tsen.HUM.id2 = NodeID & 0xFF;
 	tsen.HUM.humidity = (BYTE)humidity;
 	tsen.HUM.humidity_status = Get_Humidity_Level(tsen.HUM.humidity);
-	sDecodeRXMessage(this, (const unsigned char*)& tsen.HUM, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& tsen.HUM, defaultname.c_str(), BatteryLevel);
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%d", NodeID & 0xffff);
+	SendDecodeRXMessage(devicid ,pTypeHUM, sTypeHUM1, (const unsigned char*)& tsen.HUM, defaultname, BatteryLevel);
 }
 
 void CDomoticzHardwareBase::SendBaroSensor(const int NodeID, const int ChildID, const int BatteryLevel, const float pressure, const int forecast, const std::string& defaultname)
@@ -202,7 +230,10 @@ void CDomoticzHardwareBase::SendBaroSensor(const int NodeID, const int ChildID, 
 	gdevice.intval1 = (NodeID << 8) | ChildID;
 	gdevice.intval2 = forecast;
 	gdevice.floatval1 = pressure;
-	sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%08X", gdevice.intval1);
+	SendDecodeRXMessage(devicid ,pTypeGeneral, sTypeBaro, (const unsigned char*)& gdevice, defaultname, BatteryLevel);
 }
 
 void CDomoticzHardwareBase::SendTempHumSensor(const int NodeID, const int BatteryLevel, const float temperature, const int humidity, const std::string& defaultname, const int RssiLevel /* =12 */)
@@ -225,7 +256,11 @@ void CDomoticzHardwareBase::SendTempHumSensor(const int NodeID, const int Batter
 	tsen.TEMP_HUM.humidity = (BYTE)humidity;
 	tsen.TEMP_HUM.humidity_status = Get_Humidity_Level(tsen.TEMP_HUM.humidity);
 
-	sDecodeRXMessage(this, (const unsigned char*)& tsen.TEMP_HUM, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& tsen.TEMP_HUM, defaultname.c_str(), BatteryLevel);
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%d", NodeID & 0xffff);
+	SendDecodeRXMessage(devicid ,pTypeTEMP_HUM, sTypeTH5, (const unsigned char*)& tsen.TEMP_HUM, defaultname, BatteryLevel);
+
 }
 
 void CDomoticzHardwareBase::SendTempHumBaroSensor(const int NodeID, const int BatteryLevel, const float temperature, const int humidity, const float pressure, int forecast, const std::string& defaultname, const int RssiLevel /* =12 */)
@@ -255,7 +290,12 @@ void CDomoticzHardwareBase::SendTempHumBaroSensor(const int NodeID, const int Ba
 
 	tsen.TEMP_HUM_BARO.forecast = (BYTE)forecast;
 
-	sDecodeRXMessage(this, (const unsigned char*)& tsen.TEMP_HUM_BARO, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& tsen.TEMP_HUM_BARO, defaultname.c_str(), BatteryLevel);
+
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%d", NodeID & 0xffff);
+	SendDecodeRXMessage(devicid ,pTypeTEMP_HUM_BARO, sTypeTHB1, (const unsigned char*)& tsen.TEMP_HUM_BARO, defaultname, BatteryLevel);
+
 }
 
 void CDomoticzHardwareBase::SendTempHumBaroSensorFloat(const int NodeID, const int BatteryLevel, const float temperature, const int humidity, const float pressure, const uint8_t forecast, const std::string& defaultname, const int RssiLevel /* =12 */)
@@ -284,7 +324,11 @@ void CDomoticzHardwareBase::SendTempHumBaroSensorFloat(const int NodeID, const i
 	tsen.TEMP_HUM_BARO.barol = (BYTE)(ab10);
 	tsen.TEMP_HUM_BARO.forecast = forecast;
 
-	sDecodeRXMessage(this, (const unsigned char*)& tsen.TEMP_HUM_BARO, defaultname.c_str(), BatteryLevel);
+//	sDecodeRXMessage(this, (const unsigned char*)& tsen.TEMP_HUM_BARO, defaultname.c_str(), BatteryLevel);
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%d", NodeID & 0xffff);
+	SendDecodeRXMessage(devicid, pTypeTEMP_HUM_BARO, sTypeTHBFloat, (const unsigned char*)& tsen.TEMP_HUM_BARO, defaultname, BatteryLevel);
+
 }
 
 void CDomoticzHardwareBase::SendTempBaroSensor(const uint8_t NodeID, const int BatteryLevel, const float temperature, const float pressure, const std::string& defaultname)
@@ -307,7 +351,11 @@ void CDomoticzHardwareBase::SendTempBaroSensor(const uint8_t NodeID, const int B
 		tsensor.forecast = baroForecastPartlyCloudy;
 	else
 		tsensor.forecast = baroForecastSunny;
-	sDecodeRXMessage(this, (const unsigned char*)& tsensor, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& tsensor, defaultname.c_str(), BatteryLevel);
+
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%d", (unsigned)tsensor.id1 & 0xff);
+	SendDecodeRXMessage(devicid, pTypeTEMP_BARO, sTypeBMP085, (const unsigned char*)& tsensor, defaultname, BatteryLevel);
 }
 
 void CDomoticzHardwareBase::SendSetPointSensor(const uint8_t NodeID, const uint8_t ChildID, const unsigned char SensorID, const float Temp, const std::string& defaultname)
@@ -332,7 +380,11 @@ void CDomoticzHardwareBase::SendDistanceSensor(const int NodeID, const int Child
 	gdevice.subtype = sTypeDistance;
 	gdevice.intval1 = (NodeID << 8) | ChildID;
 	gdevice.floatval1 = distance;
-	sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
+
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%08X", gdevice.intval1);
+	SendDecodeRXMessage(devicid, pTypeGeneral, sTypeDistance, (const unsigned char*)& gdevice, defaultname, BatteryLevel);
 }
 
 void CDomoticzHardwareBase::SendTextSensor(const int NodeID, const int ChildID, const int BatteryLevel, const std::string& textMessage, const std::string& defaultname)
@@ -344,7 +396,11 @@ void CDomoticzHardwareBase::SendTextSensor(const int NodeID, const int ChildID, 
 	if (sstatus.size() > 63)
 		sstatus = sstatus.substr(0, 63);
 	strcpy(gdevice.text, sstatus.c_str());
-	sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
+//	sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%08X", gdevice.intval1);
+	SendDecodeRXMessage(devicid, pTypeGeneral, sTypeTextStatus, (const unsigned char*)& gdevice, defaultname, BatteryLevel);
+
 }
 
 std::string CDomoticzHardwareBase::GetTextSensorText(const int NodeID, const int ChildID, bool& bExists)
@@ -531,7 +587,11 @@ void CDomoticzHardwareBase::SendKwhMeter(const int NodeID, const int ChildID, co
 	gdevice.intval1 = (NodeID << 8) | ChildID;
 	gdevice.floatval1 = (float)musage;
 	gdevice.floatval2 = (float)(mtotal * 1000.0);
-	sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
+
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%08X", gdevice.intval1);
+	SendDecodeRXMessage(devicid, pTypeGeneral, sTypeKwh, (const unsigned char*)& gdevice, defaultname, BatteryLevel);
 }
 
 double CDomoticzHardwareBase::GetKwhMeter(const int NodeID, const int ChildID, bool& bExists)
@@ -587,7 +647,11 @@ void CDomoticzHardwareBase::SendLuxSensor(const uint8_t NodeID, const uint8_t Ch
 	lmeter.dunit = ChildID;
 	lmeter.fLux = Lux;
 	lmeter.battery_level = BatteryLevel;
-	sDecodeRXMessage(this, (const unsigned char*)& lmeter, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& lmeter, defaultname.c_str(), BatteryLevel);\
+
+	char devicid[16];
+	snprintf(devicid, sizeof(devicid), "%X%02X%02X%02X", lmeter.id1, lmeter.id2, lmeter.id3, lmeter.id4);
+	SendDecodeRXMessage(devicid, pTypeLux, sTypeLux, (const unsigned char*)& lmeter, defaultname, BatteryLevel);
 }
 
 void CDomoticzHardwareBase::SendAirQualitySensor(const uint8_t NodeID, const uint8_t ChildID, const int BatteryLevel, const int AirQuality, const std::string& defaultname)
@@ -611,7 +675,11 @@ void CDomoticzHardwareBase::SendUsageSensor(const uint8_t NodeID, const uint8_t 
 	umeter.id4 = NodeID;
 	umeter.dunit = ChildID;
 	umeter.fusage = Usage;
-	sDecodeRXMessage(this, (const unsigned char*)& umeter, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& umeter, defaultname.c_str(), BatteryLevel);
+
+	char devicid[16];
+	snprintf(devicid, sizeof(devicid), "%X%02X%02X%02X", umeter.id1, umeter.id2, umeter.id3, umeter.id4);
+	SendDecodeRXMessage(devicid, pTypeUsage, sTypeElectric, (const unsigned char*)& umeter, defaultname, BatteryLevel);
 }
 
 void CDomoticzHardwareBase::SendSwitchIfNotExists(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const bool bOn, const double Level, const std::string& defaultname)
@@ -781,12 +849,16 @@ void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Child
 	else
 		lcmd.command = Color_SetColor;
 	lcmd.color = color;
-	sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
+
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%08X", lcmd.id);
+	SendDecodeRXMessage(devicid, pTypeColorSwitch, subType, (const unsigned char*)& lcmd, defaultname, BatteryLevel);
 }
 
 
 
-void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const std::string& Hex, const std::string& Brightness, const bool bIsWhite, const int BatteryLevel, const std::string& defaultname)
+void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const std::string& Hex, const std::string& Brightness, const bool bIsWhite, const int Action, const int BatteryLevel, const std::string& defaultname)
 {
 	uint8_t subType = SubType;
 	if (SubType < sTypeColor_RGB_W || SubType > sTypeColor_CW_WW)
@@ -867,8 +939,24 @@ void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Child
 		lcmd.command = Color_LedOff;
 	else
 		lcmd.command = Color_SetColor;
-	lcmd.color = color;
-	sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
+
+	if (Action == 1)
+	{
+		lcmd.command = Color_LedOn;
+	}
+	else if (Action == 2)
+	{
+		lcmd.command = Color_LedOff;
+	}
+	else
+	{
+		lcmd.color = color;
+	}
+	//sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%08X", lcmd.id);
+	SendDecodeRXMessage(devicid, pTypeColorSwitch, subType, (const unsigned char*)& lcmd, defaultname, BatteryLevel);
+
 }
 
 
@@ -924,7 +1012,11 @@ void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Child
 		lcmd.command = Color_SetColor;
 	lcmd.dunit = ChildID;
 	lcmd.color = color;
-	sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
+//	sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%08X", lcmd.id);
+	SendDecodeRXMessage(devicid, pTypeColorSwitch, subType, (const unsigned char*)& lcmd, defaultname, BatteryLevel);
+
 }
 
 
@@ -1014,7 +1106,12 @@ void CDomoticzHardwareBase::SendWaterflowSensor(const int NodeID, const uint8_t 
 	gDevice.id = ChildID;
 	gDevice.intval1 = (NodeID << 8) | ChildID;
 	gDevice.floatval1 = LPM;
-	sDecodeRXMessage(this, (const unsigned char*)& gDevice, defaultname.c_str(), BatteryLevel);
+	//sDecodeRXMessage(this, (const unsigned char*)& gDevice, defaultname.c_str(), BatteryLevel);
+
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%08X", gDevice.intval1);
+	SendDecodeRXMessage(devicid, pTypeColorSwitch, sTypeWaterflow, (const unsigned char*)& gDevice, defaultname, BatteryLevel);
+
 }
 
 void CDomoticzHardwareBase::SendVisibilitySensor(const int NodeID, const int ChildID, const int BatteryLevel, const float Visibility, const std::string& defaultname)
@@ -1127,7 +1224,11 @@ void CDomoticzHardwareBase::SendPressureSensor(const int NodeID, const int Child
 	gdevice.subtype = sTypePressure;
 	gdevice.intval1 = (NodeID << 8) | ChildID;
 	gdevice.floatval1 = pressure;
-	sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
+//	sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
+
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%08X", gdevice.intval1);
+	SendDecodeRXMessage(devicid, pTypeColorSwitch, sTypePressure, (const unsigned char*)& gdevice, defaultname, BatteryLevel);
 }
 
 void CDomoticzHardwareBase::SendSolarRadiationSensor(const unsigned char NodeID, const int BatteryLevel, const float radiation, const std::string& defaultname)
@@ -1167,7 +1268,11 @@ void CDomoticzHardwareBase::SendGeneralSwitch(const int NodeID, const int ChildI
 	gSwitch.cmnd = SwitchState;
 	gSwitch.level = Level;
 	gSwitch.rssi = (uint8_t)RssiLevel;
-	sDecodeRXMessage(this, (const unsigned char*)& gSwitch, defaultname.c_str(), BatteryLevel);
+//	sDecodeRXMessage(this, (const unsigned char*)& gSwitch, defaultname.c_str(), BatteryLevel);
+	char devicid[16];
+	snprintf (devicid, sizeof(devicid), "%08X", gSwitch.id);
+	SendDecodeRXMessage(devicid, pTypeGeneralSwitch, sSwitchTypeAC, (const unsigned char*)& gSwitch, defaultname, BatteryLevel);
+
 }
 
 void CDomoticzHardwareBase::SendMoistureSensor(const int NodeID, const int BatteryLevel, const int mLevel, const std::string& defaultname)
