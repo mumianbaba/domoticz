@@ -113,6 +113,12 @@ ENDIF(USE_BUILTIN_MQTT)
 
 option(USE_BUILTIN_SQLITE "Use builtin sqlite library" YES)
 IF(USE_BUILTIN_SQLITE)
+
+  if(SQLITE_SHM_DIRECTORY)
+  add_definitions(-DSQLITE_SHM_DIRECTORY="${SQLITE_SHM_DIRECTORY}")
+  message("SQLITE_SHM_DIRECTORY:${SQLITE_SHM_DIRECTORY}")
+  endif()
+
   add_subdirectory (sqlite)
   get_directory_property (SQLite_LIBRARIES DIRECTORY sqlite DEFINITION SQLite_LIBRARIES)
 ELSE(USE_BUILTIN_SQLITE)
