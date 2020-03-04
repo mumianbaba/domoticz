@@ -824,6 +824,14 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 			std::string errorMessage;
 			m_sql.AddUserVariable("XiaomiMP3", USERVARTYPE_INTEGER, "10001", errorMessage);
 		}
+
+		if ((Name == "Xiaomi Smart Plug") || (Name == "Xiaomi Smart Wall Plug")) {
+			if (load_power != "" || power_consumed != "") {
+				double power = atof(load_power.c_str());
+				double consumed = atof(power_consumed.c_str()) / 1000;
+				SendKwhMeter(sID, 1, 255, power, consumed, "Xiaomi Smart Plug Usage");
+			}
+		}
 	}
 	else {
 		int nvalue = atoi(result[0][0].c_str());
@@ -841,9 +849,9 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 			}
 		}
 		if ((Name == "Xiaomi Smart Plug") || (Name == "Xiaomi Smart Wall Plug")) {
-			if (load_power != "" && power_consumed != "") {
-				int power = atoi(load_power.c_str());
-				int consumed = atoi(power_consumed.c_str()) / 1000;
+			if (load_power != "" || power_consumed != "") {
+				double power = atof(load_power.c_str());
+				double consumed = atof(power_consumed.c_str()) / 1000;
 				SendKwhMeter(sID, 1, 255, power, consumed, "Xiaomi Smart Plug Usage");
 			}
 		}
@@ -1400,6 +1408,10 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 							else if (params[i].isMember("load_power"))
 							{
 								load_power = params[i]["load_power"].asString();
+								if (atof(load_power.c_str()) > 0.0)
+								{
+									on= true;
+								}
 								commit = true;
 							}
 							else if (params[i].isMember("energy_consumed"))
@@ -1410,7 +1422,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						}
 						if (commit)
 						{
-							sleep_milliseconds(100);
+							sleep_milliseconds(200);
 							level = 0;
 							TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, load_power, consumed, battery);			
 						}
