@@ -904,6 +904,7 @@ void XiaomiGateway::InsertUpdateLux(const std::string & nodeid, const std::strin
 
 bool XiaomiGateway::StartHardware()
 {
+	_log.Log(LOG_STATUS, "XiaomiGateway StartHardware 今天是个好日子20200309", m_HwdID);
 	RequestStart();
 
 	m_bDoRestart = false;
@@ -1723,7 +1724,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 								commit = true;
 							}
 						}
-				
+
 						if(status == "open" )
 						{
 							on = true;
@@ -1745,6 +1746,11 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						unsigned int irgb = 0;
 						unsigned int ib = 0;
 						unsigned int it = 0;
+
+						bool brgb = false;
+						bool bb = false;
+						bool bt = false;
+
 						int action = 0;
 
 						for (int i = 0; i < (int)params.size(); i++)
@@ -1758,16 +1764,19 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 							{
 								irgb = params[i]["light_rgb"].asUInt();
 								commit = true;
+								brgb = true;
 							}
 							else if(params[i].isMember("light_level"))
 							{
 								ib  = params[i]["light_level"].asUInt();
 								commit = true;
+								bb = true;
 							}
 							else if(params[i].isMember("color_temp"))
 							{
 								it = params[i]["color_temp"].asUInt();
 								commit = true;
+								bt = true;
 							}
 						}
 						if(status == "on")
@@ -1780,13 +1789,17 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 							std::string brightness_int = "";
 
 							ib = ib*0x64 /0xff;
-							if(irgb > 0 && ib == 0)
+							if (brgb)
 							{
-								action = 1;
-							}
-							else if(irgb == 0)
-							{
-								action = 2;
+
+								if (irgb == 0)
+								{
+									action = 2; // close
+								}
+								else
+								{
+									action = 1; //open
+								}
 							}
 							brightness_int = std::to_string(ib);
 
@@ -1798,7 +1811,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						}
 
 					}
-					else if (model == "gateway" || model == "gateway.v3" || model == "acpartner.v3")
+					else if (model == "gateway" || model == "gateway.v3" || model == "acpartner.v3" || model == "tenbay_gw")
 					{
 						name = "Xiaomi RGB Gateway";
 						std::string rgb = root2["rgb"].asString();
