@@ -61,6 +61,181 @@ const char* rep_hbeat = "heartbeat";
 }
 
 
+
+std::string GetDeviceID(const int devType, const int subType, unsigned int rowId)
+{
+
+	char szTmp[64];
+	std::string DeviceId = "";
+
+	memset(szTmp, 0, sizeof(szTmp));
+
+	switch (devType)
+	{
+		case pTypeRAIN:
+		{
+			sprintf(szTmp, "%d", rowId);
+		}
+		break;
+		case pTypeWIND:
+		{
+			sprintf(szTmp, "%d", rowId);
+		}
+		break;
+
+		case pTypeTEMP:
+		{
+			sprintf(szTmp, "%d", rowId);
+		}
+		break;
+
+		case pTypeHUM:
+		{
+			sprintf(szTmp, "%d", rowId);
+		}
+		break;
+
+		case pTypeTEMP_HUM:
+		{
+			sprintf(szTmp, "%d", rowId);
+		}
+		break;
+		case pTypeTEMP_HUM_BARO:
+		{
+			sprintf(szTmp, "%d", rowId);
+		}
+		break;
+		case pTypeTEMP_BARO:
+		{
+			sprintf(szTmp, "%d", rowId);
+		}
+		break;
+		case pTypeTEMP_RAIN:
+		{
+			sprintf(szTmp, "%d", rowId);
+		}
+		break;
+		case pTypeUV:
+		{
+			sprintf(szTmp, "%d", rowId);
+		}
+		break;
+
+		case pTypeFS20:
+		{
+
+		}
+		break;
+		case pTypeFan:
+		{
+
+		}
+		break;
+		case pTypeHomeConfort:
+		{
+			unsigned char id1 = rowId;
+			unsigned char id2 = rowId;
+			unsigned char id3 = rowId;
+			unsigned char id4 = rowId;
+
+			sprintf(szTmp, "%02X%02X%02X%02X", id1, id2,id3, id4);
+
+		}
+		break;
+		case pTypeColorSwitch:
+		{
+			sprintf(szTmp, "%08X", rowId);
+		}
+		break;
+		case pTypePOWER:
+		{
+			sprintf(szTmp, "%d", rowId);
+		}
+		break;
+
+		case pTypeUsage:
+		{
+			unsigned char id1 = 0;
+			unsigned char id2 = 0;
+			unsigned char id3 = 0;
+			unsigned char id4 = (unsigned char)(rowId & 0xff);
+			sprintf(szTmp, "%X%02X%02X%02X", id1, id2, id3, id4);
+		}
+		break;
+
+		case pTypeLux:
+		{
+			unsigned char id1 = 0;
+			unsigned char id2 = 0;
+			unsigned char id3 = 0;
+			unsigned char id4 = (unsigned char)(rowId & 0xff);
+
+			sprintf(szTmp, "%X%02X%02X%02X", id1, id2, id3, id4);
+		}
+		break;
+
+		case pTypeGeneral:
+		{
+			if (
+				(subType == sTypeVoltage) ||
+				(subType == sTypeCurrent) ||
+				(subType == sTypePercentage) ||
+				(subType == sTypeWaterflow) ||
+				(subType == sTypePressure) ||
+				(subType == sTypeZWaveClock) ||
+				(subType == sTypeZWaveThermostatMode) ||
+				(subType == sTypeZWaveThermostatFanMode) ||
+				(subType == sTypeZWaveThermostatOperatingState) ||
+				(subType == sTypeFan) ||
+				(subType == sTypeTextStatus) ||
+				(subType == sTypeSoundLevel) ||
+				(subType == sTypeBaro) ||
+				(subType == sTypeDistance) ||
+				(subType == sTypeSoilMoisture) ||
+				(subType == sTypeCustom) ||
+				(subType == sTypeKwh) ||
+				(subType == sTypeZWaveAlarm)
+				)
+			{
+				sprintf(szTmp, "%08X", rowId);
+			}
+			else
+			{
+				sprintf(szTmp, "%d", rowId);
+
+			}
+		}
+		break;
+		case pTypeGeneralSwitch:
+		{
+			sprintf(szTmp, "%08X", rowId);
+		}
+		break;
+
+		case pTypeWEATHER:
+		{
+			unsigned char id1 = 0;
+			unsigned char id2 = 0;
+			unsigned char id3 = 0;
+			unsigned char id4 = (unsigned char)(rowId & 0xff);
+
+			sprintf(szTmp, "%X%02X%02X%02X", id1, id2, id3, id4);
+		}
+		break;
+
+		default:
+		break;
+	}
+	DeviceId = szTmp;
+	return DeviceId;
+}
+
+
+
+
+
+
+
 #define round(a) ( int ) ( a + .5 )
 // Removing this vector and use unitcode to tell what kind of device each is
 //std::vector<std::string> arrAqara_Wired_ID;
@@ -212,6 +387,7 @@ XiaomiGateway::XiaomiGateway(const int ID)
 	m_HwdID = ID;
 	m_bDoRestart = false;
 	m_ListenPort9898 = false;
+	m_sIDMap.clear();
 }
 
 XiaomiGateway::~XiaomiGateway(void)
@@ -236,6 +412,8 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 	std::string mac = "";
 	std::stringstream s_strid2;
 
+	int rowId = 0;
+
 	if (packettype == pTypeGeneralSwitch) {
 		_tGeneralSwitch *xcmd = (_tGeneralSwitch*)pdata;
 
@@ -248,7 +426,8 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 		std::string cmdcommand = "";
 		std::string cmddevice = "";
 
-		mac = GetMacByDeviceID(szTmp);
+		rowId = (unsigned int)xcmd->id;
+		mac = m_sIDMap[rowId];
 
 		if (xcmd->unitcode == 8) {
 			cmdchannel = "\"channel_0\":";
@@ -351,7 +530,8 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 		sid = s_strid2.str();
 		std::transform(sid.begin(), sid.end(), sid.begin(), ::tolower);
 
-		mac = GetMacByDeviceID(szTmp);
+		rowId = (unsigned int)xcmd->id;
+		mac = m_sIDMap[rowId];
 
 		if (xcmd->command == Color_LedOn){
 			m_GatewayBrightnessInt = 42;
@@ -513,72 +693,12 @@ bool XiaomiGateway::SendMessageToGateway(const std::string &controlmessage) {
 	return result;
 }
 
-
- std::string XiaomiGateway::GetMacByDeviceID(const std::string& deviceid)
-{
-	std::string mac ="";
-	std::vector<std::vector<std::string> > result;
-	result = m_sql.safe_query("SELECT Mac FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q')", m_HwdID, deviceid.c_str());
-	if (result.empty()) {
-		_log.Log(LOG_STATUS, "XiaomiGateway: UpdateMac sql result null");
-	}
-	else
-	{
-		mac = result[0][0];
-	}
-	_log.Log(LOG_STATUS, "XiaomiGateway: GetMacByDeviceID deviceid:%s mac:%s",deviceid.c_str(), mac.c_str());
-	return mac;
-}
-
-
-void XiaomiGateway::UpdateMac(const std::string &nodeid, const std::string& deviceid)
-{
-	std::vector<std::vector<std::string> > result;
-	result = m_sql.safe_query("SELECT Mac FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q')", m_HwdID, deviceid.c_str());
-	if (result.empty()) {
-		_log.Log(LOG_STATUS, "XiaomiGateway: UpdateMac sql result null");
-	}
-	else
-	{
-		if (result[0][0] == "0")
-		{
-			_log.Log(LOG_STATUS, "XiaomiGateway: UpdateMac mac is 0, set mac:%s", nodeid.c_str());
-			m_sql.safe_query("UPDATE DeviceStatus SET Mac='%q' WHERE(HardwareID == %d) AND (DeviceID == '%q')", nodeid.c_str(), m_HwdID, deviceid.c_str());
-		}
-	}
-}
-
-void XiaomiGateway::UpdateMac(const std::string &nodeid, const std::string& format, uint64_t mask)
-{
-	unsigned int sID = GetShortID(nodeid);
-	if (sID > 0) {
-		char DeviceID[64];
-		snprintf (DeviceID, sizeof(DeviceID), format.c_str(), (((uint64_t)sID) & mask));
-		std::cout<<"UpdateMac nodeid:"<<nodeid<<" format:"<<format<<"  mask:"<<mask<<std::endl;
-		std::cout<<"sID:"<<sID<<" DeviceID:"<<DeviceID<<std::endl;
-		
-		std::vector<std::vector<std::string> > result;
-		result = m_sql.safe_query("SELECT Mac FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q')", m_HwdID, DeviceID);
-		if (result.empty()) {
-			_log.Log(LOG_STATUS, "XiaomiGateway: UpdateMac result null, HardwareID=%d sID=%u DeviceID=%s", m_HwdID, sID,  DeviceID);
-			_log.Log(LOG_STATUS, "(sID & mask)=%u", (((uint64_t)sID) & mask));
-		}
-		else
-		{
-			if (result[0][0] == "0")
-			{
-				_log.Log(LOG_STATUS, "XiaomiGateway: UpdateMac mac is 0, set mac:%s", nodeid.c_str());
-				m_sql.safe_query("UPDATE DeviceStatus SET Mac='%q' WHERE(HardwareID == %d) AND (DeviceID == '%q')", nodeid.c_str(), m_HwdID, DeviceID);
-			}
-		}
-	}
-}
 void XiaomiGateway::InsertUpdateTemperature(const std::string &nodeid, const std::string &Name, const float Temperature, const int battery)
 {
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0) {
 		SendTempSensor(sID, battery, Temperature, Name);
-		UpdateMac(nodeid, "%d", 0xffff);
+		m_sIDMap[sID & 0xffff] = nodeid;
 	}
 }
 
@@ -587,7 +707,7 @@ void XiaomiGateway::InsertUpdateHumidity(const std::string &nodeid, const std::s
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0) {
 		SendHumiditySensor(sID, battery, Humidity, Name);
-		UpdateMac(nodeid, "%d", 0xffff);
+		m_sIDMap[sID & 0xffff] = nodeid;
 	}
 }
 
@@ -596,7 +716,7 @@ void XiaomiGateway::InsertUpdatePressure(const std::string &nodeid, const std::s
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0) {
 		SendPressureSensor(sID, 1, battery, Pressure, Name);
-		UpdateMac(nodeid, "%d", 0xffff);
+		m_sIDMap[sID & 0xffff] = nodeid;
 	}
 }
 
@@ -615,7 +735,7 @@ void XiaomiGateway::InsertUpdateTempHumPressure(const std::string &nodeid, const
 
 	if (sID > 0) {
 		SendTempHumBaroSensor(sID, battery, Temperature, Humidity, Pressure, barometric_forcast, Name);
-		UpdateMac(nodeid, "%d", 0xffff);
+		m_sIDMap[sID & 0xffff] = nodeid;
 	}
 }
 
@@ -624,19 +744,18 @@ void XiaomiGateway::InsertUpdateTempHum(const std::string &nodeid, const std::st
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0) {
 		SendTempHumSensor(sID, battery, Temperature, Humidity, Name);
-		UpdateMac(nodeid, "%d", 0xffff);
+		m_sIDMap[sID & 0xffff] = nodeid;
+
 	}
 }
 
-void XiaomiGateway::InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const std::string& Hex, const std::string& Brightness, const bool bIsWhite, const int Action, const int battery)
+void XiaomiGateway::InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const unsigned char Mode, const int Value, const int Brightness, const bool bIsWhite, const int Action, const int battery)
 {
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0)
 	{
-		unsigned char level = atoi(Brightness.c_str());
-
-		SendRGBWSwitch(sID, 1, SubType, level, Action, bIsWhite, battery, Name);
-		UpdateMac(nodeid, "%08X", 0xffffffff);
+		SendRGBWSwitch(sID, 1, SubType, Mode , Value, Brightness, battery, Name);
+		m_sIDMap[sID & 0xffffffff] = nodeid;
 	}
 }
 
@@ -681,7 +800,9 @@ void XiaomiGateway::InsertUpdateRGBGateway(const std::string & nodeid, const std
 		ycmd.value = brightness;
 		ycmd.command = cmd;
 		m_mainworker.PushAndWaitRxMessage(this, (const unsigned char *)&ycmd, NULL, -1);
-		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', SwitchType=%d, LastLevel=%d, Mac='%q' WHERE(HardwareID == %d) AND (DeviceID == '%s') AND (Type == %d)", Name.c_str(), (STYPE_Dimmer), brightness, nodeid.c_str(), m_HwdID, szDeviceID, pTypeColorSwitch);
+		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', SwitchType=%d, LastLevel=%d WHERE(HardwareID == %d) AND (DeviceID == '%s') AND (Type == %d)", Name.c_str(), (STYPE_Dimmer), brightness, m_HwdID, szDeviceID, pTypeColorSwitch);
+
+		m_sIDMap[sID & 0xffffffff] = nodeid;
 	}
 	else {
 		nvalue = atoi(result[0][0].c_str());
@@ -758,10 +879,11 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 		return;
 	}
 
-	result = m_sql.safe_query("SELECT nValue, BatteryLevel, Mac FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q') AND (Type==%d) AND (Unit == '%d')", m_HwdID, ID.c_str(), xcmd.type, xcmd.unitcode);
+	result = m_sql.safe_query("SELECT nValue, BatteryLevel FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q') AND (Type==%d) AND (Unit == '%d')", m_HwdID, ID.c_str(), xcmd.type, xcmd.unitcode);
 	if (result.empty())
 	{
 		_log.Log(LOG_STATUS, "XiaomiGateway: New %s Found (%s)", Name.c_str(), nodeid.c_str());
+		m_sIDMap[sID & 0xffffffff] = nodeid;
 		m_mainworker.PushAndWaitRxMessage(this, (const unsigned char *)&xcmd, NULL, battery);
 		if (customimage == 0) {
 			if (switchtype == STYPE_OnOff) {
@@ -772,7 +894,7 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 			}
 		}
 
-		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', SwitchType=%d, CustomImage=%i, Mac='%q' WHERE(HardwareID == %d) AND (DeviceID == '%q') AND (Unit == '%d')", Name.c_str(), (switchtype), customimage, nodeid.c_str(), m_HwdID, ID.c_str(), xcmd.unitcode);
+		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', SwitchType=%d, CustomImage=%i WHERE(HardwareID == %d) AND (DeviceID == '%q') AND (Unit == '%d')", Name.c_str(), (switchtype), customimage, m_HwdID, ID.c_str(), xcmd.unitcode);
 		if (switchtype == STYPE_Selector) {
 			result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q') AND (Type==%d) AND (Unit == '%d')", m_HwdID, ID.c_str(), xcmd.type, xcmd.unitcode);
 			if (!result.empty()) {
@@ -868,14 +990,8 @@ void XiaomiGateway::InsertUpdateCubeText(const std::string & nodeid, const std::
 {
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0) {
-		SendTextSensor(sID, sID, 255, degrees.c_str(), Name);
-		char DeviceID[64];
-		snprintf (DeviceID, sizeof(DeviceID), "%08X", (sID << 8) | sID);
-		std::vector<std::vector<std::string> > result;
-		result = m_sql.safe_query("SELECT Mac FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q')", m_HwdID, DeviceID);
-		if (!result.empty() && result[0][0] == "0") {
-			m_sql.safe_query("UPDATE DeviceStatus SET Mac='%q' WHERE(HardwareID == %d) AND (DeviceID == '%q')", nodeid.c_str(), m_HwdID, DeviceID);
-		}
+		SendTextSensor(sID, sID & 0xff, 255, degrees.c_str(), Name);
+		m_sIDMap[sID & 0xffffffff] = nodeid;
 	}
 }
 
@@ -886,14 +1002,8 @@ void XiaomiGateway::InsertUpdateVoltage(const std::string & nodeid, const std::s
 		if (sID > 0) {
 			int percent = ((VoltageLevel - 2200) / 10);
 			float voltage = (float)VoltageLevel / 1000;
-			SendVoltageSensor(sID, sID, percent, voltage, "Xiaomi Voltage");
-			char DeviceID[64];
-			snprintf (DeviceID, sizeof(DeviceID), "%08X", (sID << 8) | sID);
-			std::vector<std::vector<std::string> > result;
-			result = m_sql.safe_query("SELECT Mac FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q')", m_HwdID, DeviceID);
-			if (!result.empty() && result[0][0] == "0") {
-				m_sql.safe_query("UPDATE DeviceStatus SET Mac='%q' WHERE(HardwareID == %d) AND (DeviceID == '%q')", nodeid.c_str(), m_HwdID, DeviceID);
-			}
+			SendVoltageSensor(sID, sID & 0xff, percent, voltage, "Xiaomi Voltage");
+			m_sIDMap[sID & 0xffffffff] = nodeid;
 		}
 	}
 }
@@ -904,13 +1014,12 @@ void XiaomiGateway::InsertUpdateLux(const std::string & nodeid, const std::strin
 	if (sID > 0) {
 		float lux = (float)Illumination;
 		SendLuxSensor(sID, sID, battery, lux, Name);
-		UpdateMac(nodeid, "%07X", 0xff);
+		m_sIDMap[sID & 0xff] = nodeid;
 	}
 }
 
 bool XiaomiGateway::StartHardware()
 {
-	_log.Log(LOG_STATUS, "XiaomiGateway StartHardware 今天是个好日子20200309");
 	RequestStart();
 
 	m_bDoRestart = false;
@@ -1098,8 +1207,7 @@ unsigned int XiaomiGateway::GetShortID(const std::string & nodeid)
 	}
 	uint64_t sID = std::strtoull(nodeid.c_str(), NULL, 16);
 	std::cout<<"nodeid:"<<nodeid<<"-----sID:"<<sID<<std::endl;
-	//return (sID & 0xffffffff);
-	return ((uint64_t)sID & (uint64_t)0xffffffff);
+	return (sID & 0xffffffff);
 }
 
 XiaomiGateway::xiaomi_udp_server::xiaomi_udp_server(boost::asio::io_service& io_service, int m_HwdID, const std::string &gatewayIp, const std::string &localIp, const bool listenPort9898, const bool outputMessage, const bool includeVoltage, XiaomiGateway *parent)
@@ -1234,10 +1342,9 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						commit = false;
 						type = STYPE_Motion;
 						name =  (model == "motion")?"Xiaomi Motion Sensor":"Aqara Motion Sensor";
-						int ilux = -1;						
+						int ilux = -1;
 						for (int i = 0; i < (int)params.size(); i++)
 						{
-							
 							if(params[i].isMember("motion_status"))
 							{
 								status = params[i]["motion_status"].asString();
@@ -1752,7 +1859,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						std::string light_level = "";
 						std::string light_rgb = "";
 						std::string color_temp = "";
-						static unsigned int oldrgb = 0;
+						static unsigned int oldbrightness = 0;
 						unsigned int irgb = 0;
 						unsigned int ib = 0;
 						unsigned int it = 0;
@@ -1760,7 +1867,6 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						bool brgb = false;
 						bool bb = false;
 						bool bt = false;
-
 						int action = 0;
 
 						for (int i = 0; i < (int)params.size(); i++)
@@ -1768,63 +1874,50 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 							if(params[i].isMember("power_status"))
 							{
 								status = params[i]["power_status"].asString();
-								commit = true;
 							}
 							else if(params[i].isMember("light_rgb"))
 							{
 								irgb = params[i]["light_rgb"].asUInt();
-								if((oldrgb == 0 && irgb > 0)||(oldrgb != 0 && irgb == 0))
-								{
-									commit = true;
-									brgb = true;
-								}
-								oldrgb = irgb;
+								brgb = true;
 							}
 							else if(params[i].isMember("light_level"))
 							{
 								ib  = params[i]["light_level"].asUInt();
-								commit = true;
 								bb = true;
+								oldbrightness = ib;
 							}
 							else if(params[i].isMember("color_temp"))
 							{
 								it = params[i]["color_temp"].asUInt();
-								//commit = true; //色温不上报
-								//bt = true;
+								bt = true;
 							}
 						}
 						if(status == "on")
 						{
 						}
-
-						std::string rgb_hex = "";
-						std::string brightness_int = "";
-
-						
 						if (brgb)
 						{
-
-							if (irgb == 0)
-							{
-								action = 2; // close
-							}
-							else
-							{
-								action = 1; //open
-							}
+							std::cout<<"--------bbbrgb----"<<std::endl;
+							ib = irgb >> 24 & 0xff;
 						}
 
 						if (bb)
 						{
+							std::cout<<"--------bb----"<<std::endl;
 							ib = ib*0x64 /0xff;
-							brightness_int = std::to_string(ib);
+							irgb = 0xffffff;
+						}
+						if (bt)
+						{
+							/* 每次都要使用亮度，但是没亮度就上报不了，除非是on/off */
+							//TrueGateway->InsertUpdateRGBLight(sid, name, sTypeColor_CW_WW, ColorModeTemp, it, oldbrightness, false, action, battery);
 						}
 
-						//if (brgb || bb)
+						if (brgb || bb)
 						{
-							TrueGateway->InsertUpdateRGBLight(sid, name, sTypeColor_CW_WW, rgb_hex, brightness_int, false, action, battery);
+							TrueGateway->InsertUpdateRGBLight(sid, name, sTypeColor_CW_WW, ColorModeRGB, irgb, ib, false, action, battery);
 						}
-						_log.Log(LOG_STATUS, "led: rgb_hex:%s   brightness_hex:%s", rgb_hex.c_str(), brightness_int.c_str());							
+						_log.Log(LOG_STATUS, "led: rgb:%d   brightness_hex:%d", irgb, ib);
 						
 					}
 					else if (model == "gateway" || model == "gateway.v3" || model == "acpartner.v3" || model == "tenbay_gw")
@@ -1941,7 +2034,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 				_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): unknown cmd received: %s, model: %s", TrueGateway->GetGatewayHardwareID(), cmd.c_str(), model.c_str());
 			}
 
-#if 1
+#if 0
 			if (sid != "")
 			{
 				std::string mac = "";

@@ -5,6 +5,8 @@
 #include <boost/tuple/tuple.hpp>
 #include <list>
 #include <mutex>
+#include <map>
+
 
 #define MAX_LOG_LINE_LENGTH (2048*3)
 
@@ -30,7 +32,9 @@ private:
 
 	bool SendMessageToGateway(const std::string &controlmessage);
 	void InsertUpdateSwitch(const std::string &nodeid, const std::string &Name, const bool bIsOn, const _eSwitchType switchtype, const int unittype, const int level, const std::string &messagetype, const std::string &load_power, const std::string &power_consumed, const int battery);
-	void InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const std::string& Hex, const std::string& Brightness, const bool bIsWhite, const int Action, const int battery);
+	//void InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const std::string& Hex, const std::string& Brightness, const bool bIsWhite, const int Action, const int battery);
+	//void InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const unsigned char Mode, const int Value, const std::string& Brightness, const bool bIsWhite, const int Action, const int battery);
+	void InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const unsigned char Mode, const int Value, const int Brightness, const bool bIsWhite, const int Action, const int battery);
 
 	void InsertUpdateRGBGateway(const std::string &nodeid, const std::string &Name, const bool bIsOn, const int brightness, const int hue);
 	void InsertUpdateCubeText(const std::string &nodeid, const std::string &Name, const std::string &degrees);
@@ -46,10 +50,8 @@ private:
 	std::string GetGatewayKey();
 	unsigned int GetShortID(const std::string & nodeid);
 
-	std::string GetMacByDeviceID(const std::string& deviceid);
-	void UpdateMac(const std::string &nodeid, const std::string& deviceid);
-	void UpdateMac(const std::string &nodeid, const std::string& format,  uint64_t mask);
 
+	std::map<int, std::string> m_sIDMap;
 	bool m_bDoRestart;
 	std::shared_ptr<std::thread> m_thread;
 	std::shared_ptr<std::thread> m_udp_thread;
