@@ -48,7 +48,7 @@ private:
 
 	std::string GetMacByDeviceID(const std::string& deviceid);
 	void UpdateMac(const std::string &nodeid, const std::string& deviceid);
-	void UpdateMac(const std::string &nodeid, const std::string& format, uint64_t mask);
+	void UpdateMac(const std::string &nodeid, const std::string& format,  uint64_t mask);
 
 	bool m_bDoRestart;
 	std::shared_ptr<std::thread> m_thread;

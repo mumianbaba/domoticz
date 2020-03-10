@@ -553,11 +553,15 @@ void XiaomiGateway::UpdateMac(const std::string &nodeid, const std::string& form
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0) {
 		char DeviceID[64];
-		snprintf (DeviceID, sizeof(DeviceID), format.c_str(), (sID & mask));
+		snprintf (DeviceID, sizeof(DeviceID), format.c_str(), (((uint64_t)sID) & mask));
+		std::cout<<"UpdateMac nodeid:"<<nodeid<<" format:"<<format<<"  mask:"<<mask<<std::endl;
+		std::cout<<"sID:"<<sID<<" DeviceID:"<<DeviceID<<std::endl;
+		
 		std::vector<std::vector<std::string> > result;
 		result = m_sql.safe_query("SELECT Mac FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q')", m_HwdID, DeviceID);
 		if (result.empty()) {
-			_log.Log(LOG_STATUS, "XiaomiGateway: UpdateMac result null");
+			_log.Log(LOG_STATUS, "XiaomiGateway: UpdateMac result null, HardwareID=%d sID=%u DeviceID=%s", m_HwdID, sID,  DeviceID);
+			_log.Log(LOG_STATUS, "(sID & mask)=%u", (((uint64_t)sID) & mask));
 		}
 		else
 		{
@@ -629,7 +633,9 @@ void XiaomiGateway::InsertUpdateRGBLight(const std::string & nodeid, const std::
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0)
 	{
-		SendRGBWSwitch(sID, 1, SubType, Hex, Brightness, bIsWhite, Action, battery, Name);
+		unsigned char level = atoi(Brightness.c_str());
+
+		SendRGBWSwitch(sID, 1, SubType, level, Action, bIsWhite, battery, Name);
 		UpdateMac(nodeid, "%08X", 0xffffffff);
 	}
 }
@@ -904,7 +910,7 @@ void XiaomiGateway::InsertUpdateLux(const std::string & nodeid, const std::strin
 
 bool XiaomiGateway::StartHardware()
 {
-	_log.Log(LOG_STATUS, "XiaomiGateway StartHardware 今天是个好日子20200309", m_HwdID);
+	_log.Log(LOG_STATUS, "XiaomiGateway StartHardware 今天是个好日子20200309");
 	RequestStart();
 
 	m_bDoRestart = false;
@@ -1092,7 +1098,8 @@ unsigned int XiaomiGateway::GetShortID(const std::string & nodeid)
 	}
 	uint64_t sID = std::strtoull(nodeid.c_str(), NULL, 16);
 	std::cout<<"nodeid:"<<nodeid<<"-----sID:"<<sID<<std::endl;
-	return (sID & 0xffffffff);
+	//return (sID & 0xffffffff);
+	return ((uint64_t)sID & (uint64_t)0xffffffff);
 }
 
 XiaomiGateway::xiaomi_udp_server::xiaomi_udp_server(boost::asio::io_service& io_service, int m_HwdID, const std::string &gatewayIp, const std::string &localIp, const bool listenPort9898, const bool outputMessage, const bool includeVoltage, XiaomiGateway *parent)
@@ -1171,6 +1178,8 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 		Json::Value root;
 		bool showmessage = true;
 		bool ret = ParseJSon(data_, root);
+
+		_log.Log(LOG_STATUS, "XiaomiGateway: recv: %s", data_);
 		if ((!ret) || (!root.isObject()))
 		{
 			_log.Log(LOG_ERROR, "XiaomiGateway: invalid data received!");
@@ -1743,6 +1752,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						std::string light_level = "";
 						std::string light_rgb = "";
 						std::string color_temp = "";
+						static unsigned int oldrgb = 0;
 						unsigned int irgb = 0;
 						unsigned int ib = 0;
 						unsigned int it = 0;
@@ -1763,8 +1773,12 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 							else if(params[i].isMember("light_rgb"))
 							{
 								irgb = params[i]["light_rgb"].asUInt();
-								commit = true;
-								brgb = true;
+								if((oldrgb == 0 && irgb > 0)||(oldrgb != 0 && irgb == 0))
+								{
+									commit = true;
+									brgb = true;
+								}
+								oldrgb = irgb;
 							}
 							else if(params[i].isMember("light_level"))
 							{
@@ -1775,41 +1789,43 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 							else if(params[i].isMember("color_temp"))
 							{
 								it = params[i]["color_temp"].asUInt();
-								commit = true;
-								bt = true;
+								//commit = true; //色温不上报
+								//bt = true;
 							}
 						}
 						if(status == "on")
 						{
 						}
 
-						if (commit)
+						std::string rgb_hex = "";
+						std::string brightness_int = "";
+
+						
+						if (brgb)
 						{
-							std::string rgb_hex = "";
-							std::string brightness_int = "";
 
-							ib = ib*0x64 /0xff;
-							if (brgb)
+							if (irgb == 0)
 							{
-
-								if (irgb == 0)
-								{
-									action = 2; // close
-								}
-								else
-								{
-									action = 1; //open
-								}
+								action = 2; // close
 							}
-							brightness_int = std::to_string(ib);
-
-							char tmp[16];
-							snprintf (tmp, sizeof(tmp), "%06X%04X", irgb & 0xffffff, it & 0xffff);
-							rgb_hex = tmp;
-							_log.Log(LOG_STATUS, "led: rgb_hex:%s   brightness_hex:%s", rgb_hex.c_str(), brightness_int.c_str());
-							TrueGateway->InsertUpdateRGBLight(sid, name, sTypeColor_CW_WW, rgb_hex, brightness_int, false, action, battery);
+							else
+							{
+								action = 1; //open
+							}
 						}
 
+						if (bb)
+						{
+							ib = ib*0x64 /0xff;
+							brightness_int = std::to_string(ib);
+						}
+
+						//if (brgb || bb)
+						{
+							TrueGateway->InsertUpdateRGBLight(sid, name, sTypeColor_CW_WW, rgb_hex, brightness_int, false, action, battery);
+						}
+						_log.Log(LOG_STATUS, "led: rgb_hex:%s   brightness_hex:%s", rgb_hex.c_str(), brightness_int.c_str());							
+						
 					}
 					else if (model == "gateway" || model == "gateway.v3" || model == "acpartner.v3" || model == "tenbay_gw")
 					{

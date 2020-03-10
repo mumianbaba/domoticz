@@ -960,14 +960,39 @@ void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Child
 }
 
 
-void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const std::string& Hue, const std::string& Sat, const std::string& Brightness, const bool bIsWhite, const int BatteryLevel, const std::string& defaultname)
+void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const int Level, const int Action, const bool bIsWhite, const int BatteryLevel, const std::string& defaultname)
 {
 	uint8_t subType = SubType;
 	if (SubType < sTypeColor_RGB_W || SubType > sTypeColor_CW_WW)
 	{
 		subType = sTypeColor_RGB_W;
 	}
+	int level = int(Level);
+	//Send as ColorSwitch
+	_tColorSwitch lcmd;
+	lcmd.id = NodeID;
+	lcmd.subtype = subType;
+	lcmd.dunit = ChildID;
+	lcmd.value = (uint32_t)level;
 
+	if (Action == 1)  //open
+	{
+		lcmd.command = Color_LedOn;
+	}
+	else if (Action == 2)  //close
+	{
+		lcmd.command = Color_LedOff;
+	}
+	else  // set level
+	{
+		if (level == 0)
+			lcmd.command = Color_LedOff;
+		else
+			lcmd.command = Color_LedOn;
+
+		lcmd.value = (uint32_t)level;
+	}
+#if 0
 	int r, g, b;
 
 	//convert hue to RGB
@@ -1013,6 +1038,8 @@ void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Child
 	lcmd.dunit = ChildID;
 	lcmd.color = color;
 //	sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
+#endif
+
 	char devicid[16];
 	snprintf (devicid, sizeof(devicid), "%08X", lcmd.id);
 	SendDecodeRXMessage(devicid, pTypeColorSwitch, subType, (const unsigned char*)& lcmd, defaultname, BatteryLevel);
