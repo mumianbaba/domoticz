@@ -25,6 +25,13 @@ public:
 	void SetAsMainGateway(){ m_ListenPort9898 = true; };
 	void UnSetMainGateway(){ m_ListenPort9898 = false; };
 
+
+	int GetSsidBySid(const int devType, const int subType, const int sID);
+	int GetSsidBySid(const int devType, const int subType, const std::string& sid);
+	std::string GetDeviceIdBySsid(const int devType, const int subType, unsigned int rowId);
+	void SetSsidMacMap(const int ssid, const std::string & mac);
+
+
 private:
 	bool StartHardware() override;
 	bool StopHardware() override;

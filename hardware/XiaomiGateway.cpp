@@ -61,8 +61,12 @@ const char* rep_hbeat = "heartbeat";
 }
 
 
-
-std::string GetDeviceID(const int devType, const int subType, unsigned int rowId)
+/*
+	Ssid (short short id) 是为满足各种消息格式后，最终生成DeviceID(存在数据库，并在UI上展示)的id。
+	例如sid 1234567890123456   --> short id -->90123456-->适配消息格式--->3456(温度传感器)--->(数据库)idx + "3456"+ DeviceType+DeviceSubType
+	该函数将row Id 转换成DeciceID，这里的Device Id并不是数据库的主键，数据库的主键为ID，在api中为idx，从1开始依次递增。
+*/
+std::string XiaomiGateway::GetDeviceIdBySsid(const int devType, const int subType, unsigned int rowId)
 {
 
 	char szTmp[64];
@@ -73,104 +77,25 @@ std::string GetDeviceID(const int devType, const int subType, unsigned int rowId
 	switch (devType)
 	{
 		case pTypeRAIN:
-		{
-			sprintf(szTmp, "%d", rowId);
-		}
-		break;
 		case pTypeWIND:
-		{
-			sprintf(szTmp, "%d", rowId);
-		}
-		break;
-
 		case pTypeTEMP:
-		{
-			sprintf(szTmp, "%d", rowId);
-		}
-		break;
-
 		case pTypeHUM:
-		{
-			sprintf(szTmp, "%d", rowId);
-		}
-		break;
-
 		case pTypeTEMP_HUM:
-		{
-			sprintf(szTmp, "%d", rowId);
-		}
-		break;
 		case pTypeTEMP_HUM_BARO:
-		{
-			sprintf(szTmp, "%d", rowId);
-		}
-		break;
 		case pTypeTEMP_BARO:
-		{
-			sprintf(szTmp, "%d", rowId);
-		}
-		break;
 		case pTypeTEMP_RAIN:
-		{
-			sprintf(szTmp, "%d", rowId);
-		}
-		break;
 		case pTypeUV:
-		{
-			sprintf(szTmp, "%d", rowId);
-		}
-		break;
-
-		case pTypeFS20:
-		{
-
-		}
-		break;
-		case pTypeFan:
-		{
-
-		}
-		break;
-		case pTypeHomeConfort:
-		{
-			unsigned char id1 = rowId;
-			unsigned char id2 = rowId;
-			unsigned char id3 = rowId;
-			unsigned char id4 = rowId;
-
-			sprintf(szTmp, "%02X%02X%02X%02X", id1, id2,id3, id4);
-
-		}
-		break;
-		case pTypeColorSwitch:
-		{
-			sprintf(szTmp, "%08X", rowId);
-		}
-		break;
 		case pTypePOWER:
 		{
 			sprintf(szTmp, "%d", rowId);
 		}
 		break;
 
-		case pTypeUsage:
-		{
-			unsigned char id1 = 0;
-			unsigned char id2 = 0;
-			unsigned char id3 = 0;
-			unsigned char id4 = (unsigned char)(rowId & 0xff);
-			sprintf(szTmp, "%X%02X%02X%02X", id1, id2, id3, id4);
-		}
-		break;
 
-		case pTypeLux:
+		case pTypeColorSwitch:
+		case pTypeGeneralSwitch:
 		{
-			unsigned char id1 = 0;
-			unsigned char id2 = 0;
-			unsigned char id3 = 0;
-			unsigned char id4 = (unsigned char)(rowId & 0xff);
-
-			sprintf(szTmp, "%X%02X%02X%02X", id1, id2, id3, id4);
+			sprintf(szTmp, "%08X", rowId);
 		}
 		break;
 
@@ -202,15 +127,44 @@ std::string GetDeviceID(const int devType, const int subType, unsigned int rowId
 			else
 			{
 				sprintf(szTmp, "%d", rowId);
-
 			}
 		}
 		break;
-		case pTypeGeneralSwitch:
+
+
+		case pTypeHomeConfort:
 		{
-			sprintf(szTmp, "%08X", rowId);
+			unsigned char id1 = rowId;
+			unsigned char id2 = rowId;
+			unsigned char id3 = rowId;
+			unsigned char id4 = rowId;
+
+			sprintf(szTmp, "%02X%02X%02X%02X", id1, id2,id3, id4);
 		}
 		break;
+
+		case pTypeUsage:
+		{
+			unsigned char id1 = 0;
+			unsigned char id2 = 0;
+			unsigned char id3 = 0;
+			unsigned char id4 = (unsigned char)(rowId & 0xff);
+
+			sprintf(szTmp, "%X%02X%02X%02X", id1, id2, id3, id4);
+		}
+		break;
+
+		case pTypeLux:
+		{
+			unsigned char id1 = 0;
+			unsigned char id2 = 0;
+			unsigned char id3 = 0;
+			unsigned char id4 = (unsigned char)(rowId & 0xff);
+
+			sprintf(szTmp, "%X%02X%02X%02X", id1, id2, id3, id4);
+		}
+		break;
+
 
 		case pTypeWEATHER:
 		{
@@ -232,8 +186,110 @@ std::string GetDeviceID(const int devType, const int subType, unsigned int rowId
 
 
 
+/*
+	return : short short id for cmd struct
+*/
+int XiaomiGateway::GetSsidBySid(const int devType, const int subType, const std::string& sid)
+{
+	int sID = GetShortID(sid);
+	GetSsidBySid(devType, subType, sID);
+
+}
+int XiaomiGateway::GetSsidBySid(const int devType, const int subType, const int sID)
+{
+	int sSID = sID;
+
+	switch (devType)
+	{
+		case pTypeRAIN:
+		case pTypeWIND:
+		case pTypeTEMP:
+		case pTypeHUM:
+		case pTypeTEMP_HUM:
+		case pTypeTEMP_HUM_BARO:
+		case pTypeTEMP_BARO:
+		case pTypeTEMP_RAIN:
+		case pTypeUV:
+		case pTypeFS20:
+		case pTypeWEATHER:
+		case pTypePOWER:
+		{
+			return sID & 0xffff;
+		}
+		break;
+
+		case pTypeColorSwitch:
+		case pTypeGeneralSwitch:
+		{
+			return sID & 0xffffffff;
+		}
+		break;
+
+		case pTypeGeneral:
+		{
+			if (
+				(subType == sTypeVoltage) ||
+				(subType == sTypeCurrent) ||
+				(subType == sTypePercentage) ||
+				(subType == sTypeWaterflow) ||
+				(subType == sTypePressure) ||
+				(subType == sTypeZWaveClock) ||
+				(subType == sTypeZWaveThermostatMode) ||
+				(subType == sTypeZWaveThermostatFanMode) ||
+				(subType == sTypeZWaveThermostatOperatingState) ||
+				(subType == sTypeFan) ||
+				(subType == sTypeTextStatus) ||
+				(subType == sTypeSoundLevel) ||
+				(subType == sTypeBaro) ||
+				(subType == sTypeDistance) ||
+				(subType == sTypeSoilMoisture) ||
+				(subType == sTypeCustom) ||
+				(subType == sTypeKwh) ||
+				(subType == sTypeZWaveAlarm)
+				)
+			{
+				return sID & 0xffffffff;
+			}
+			else
+			{
+				return sID & 0xfffff;
+			}
+		}
+		break;
 
 
+		case pTypeHomeConfort:
+		{
+			return sID & 0xffffffff;
+		}
+		break;
+
+		case pTypeUsage:
+		{
+			return sID & 0xff;
+		}
+		break;
+
+		case pTypeLux:
+		{
+			return sID & 0xff;
+		}
+		break;
+
+		default:
+			
+		break;
+	}
+
+	return sSID;
+}
+
+
+
+void XiaomiGateway::SetSsidMacMap(const int ssid, const std::string & mac)
+{
+	m_sIDMap[ssid] = mac;
+}
 
 
 #define round(a) ( int ) ( a + .5 )
@@ -698,7 +754,8 @@ void XiaomiGateway::InsertUpdateTemperature(const std::string &nodeid, const std
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0) {
 		SendTempSensor(sID, battery, Temperature, Name);
-		m_sIDMap[sID & 0xffff] = nodeid;
+		int ssid = GetSsidBySid(pTypeTEMP, sTypeTEMP5 ,sID);
+		SetSsidMacMap(ssid, nodeid);
 	}
 }
 
@@ -707,7 +764,8 @@ void XiaomiGateway::InsertUpdateHumidity(const std::string &nodeid, const std::s
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0) {
 		SendHumiditySensor(sID, battery, Humidity, Name);
-		m_sIDMap[sID & 0xffff] = nodeid;
+		int ssid = GetSsidBySid(pTypeHUM, sTypeHUM1 ,sID);
+		SetSsidMacMap(ssid, nodeid);
 	}
 }
 
@@ -715,8 +773,9 @@ void XiaomiGateway::InsertUpdatePressure(const std::string &nodeid, const std::s
 {
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0) {
-		SendPressureSensor(sID, 1, battery, Pressure, Name);
-		m_sIDMap[sID & 0xffff] = nodeid;
+		SendPressureSensor(sID, sID & 0Xff, battery, Pressure, Name);
+		int ssid = GetSsidBySid(pTypeGeneral, sTypePressure ,sID);
+		SetSsidMacMap(ssid, nodeid);
 	}
 }
 
@@ -735,7 +794,8 @@ void XiaomiGateway::InsertUpdateTempHumPressure(const std::string &nodeid, const
 
 	if (sID > 0) {
 		SendTempHumBaroSensor(sID, battery, Temperature, Humidity, Pressure, barometric_forcast, Name);
-		m_sIDMap[sID & 0xffff] = nodeid;
+		int ssid = GetSsidBySid(pTypeTEMP_HUM_BARO, sTypeTHB1 ,sID);
+		SetSsidMacMap(ssid, nodeid);
 	}
 }
 
@@ -744,8 +804,8 @@ void XiaomiGateway::InsertUpdateTempHum(const std::string &nodeid, const std::st
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0) {
 		SendTempHumSensor(sID, battery, Temperature, Humidity, Name);
-		m_sIDMap[sID & 0xffff] = nodeid;
-
+		int ssid = GetSsidBySid(pTypeTEMP_HUM, sTypeTH5 ,sID);
+		SetSsidMacMap(ssid, nodeid);
 	}
 }
 
@@ -755,7 +815,8 @@ void XiaomiGateway::InsertUpdateRGBLight(const std::string & nodeid, const std::
 	if (sID > 0)
 	{
 		SendRGBWSwitch(sID, 1, SubType, Mode , Value, Brightness, battery, Name);
-		m_sIDMap[sID & 0xffffffff] = nodeid;
+		int ssid = GetSsidBySid(pTypeColorSwitch, SubType ,sID);
+		SetSsidMacMap(ssid, nodeid);
 	}
 }
 
@@ -802,7 +863,8 @@ void XiaomiGateway::InsertUpdateRGBGateway(const std::string & nodeid, const std
 		m_mainworker.PushAndWaitRxMessage(this, (const unsigned char *)&ycmd, NULL, -1);
 		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', SwitchType=%d, LastLevel=%d WHERE(HardwareID == %d) AND (DeviceID == '%s') AND (Type == %d)", Name.c_str(), (STYPE_Dimmer), brightness, m_HwdID, szDeviceID, pTypeColorSwitch);
 
-		m_sIDMap[sID & 0xffffffff] = nodeid;
+		int ssid = GetSsidBySid(pTypeColorSwitch, ycmd.subtype ,sID);
+		SetSsidMacMap(ssid, nodeid);
 	}
 	else {
 		nvalue = atoi(result[0][0].c_str());
@@ -883,7 +945,10 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 	if (result.empty())
 	{
 		_log.Log(LOG_STATUS, "XiaomiGateway: New %s Found (%s)", Name.c_str(), nodeid.c_str());
-		m_sIDMap[sID & 0xffffffff] = nodeid;
+
+		int ssid = GetSsidBySid(xcmd.type, xcmd.subtype ,sID);
+		SetSsidMacMap(ssid, nodeid);
+
 		m_mainworker.PushAndWaitRxMessage(this, (const unsigned char *)&xcmd, NULL, battery);
 		if (customimage == 0) {
 			if (switchtype == STYPE_OnOff) {
@@ -958,6 +1023,8 @@ void XiaomiGateway::InsertUpdateSwitch(const std::string &nodeid, const std::str
 				double power = atof(load_power.c_str());
 				double consumed = atof(power_consumed.c_str()) / 1000;
 				SendKwhMeter(sID, 1, 255, power, consumed, "Xiaomi Smart Plug Usage");
+				int ssid = GetSsidBySid(pTypeGeneral, sTypeKwh,sID);
+				SetSsidMacMap(ssid, nodeid);
 			}
 		}
 	}
@@ -991,7 +1058,8 @@ void XiaomiGateway::InsertUpdateCubeText(const std::string & nodeid, const std::
 	unsigned int sID = GetShortID(nodeid);
 	if (sID > 0) {
 		SendTextSensor(sID, sID & 0xff, 255, degrees.c_str(), Name);
-		m_sIDMap[sID & 0xffffffff] = nodeid;
+		int ssid = GetSsidBySid(pTypeGeneral, sTypeTextStatus,sID);
+		SetSsidMacMap(ssid, nodeid);
 	}
 }
 
@@ -1003,7 +1071,8 @@ void XiaomiGateway::InsertUpdateVoltage(const std::string & nodeid, const std::s
 			int percent = ((VoltageLevel - 2200) / 10);
 			float voltage = (float)VoltageLevel / 1000;
 			SendVoltageSensor(sID, sID & 0xff, percent, voltage, "Xiaomi Voltage");
-			m_sIDMap[sID & 0xffffffff] = nodeid;
+			int ssid = GetSsidBySid(pTypeGeneral, sTypeVoltage, sID);
+			SetSsidMacMap(ssid, nodeid);
 		}
 	}
 }
@@ -1014,7 +1083,8 @@ void XiaomiGateway::InsertUpdateLux(const std::string & nodeid, const std::strin
 	if (sID > 0) {
 		float lux = (float)Illumination;
 		SendLuxSensor(sID, sID, battery, lux, Name);
-		m_sIDMap[sID & 0xff] = nodeid;
+		int ssid = GetSsidBySid(pTypeLux, sTypeLux, sID);
+		SetSsidMacMap(ssid, nodeid);
 	}
 }
 
@@ -1995,6 +2065,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						message.append(sid.c_str());
 						message.append("\"}");
 						std::shared_ptr<std::string> message1(new std::string(message));
+						_log.Log(LOG_STATUS,  "send to GW :%s", message.c_str());
 						boost::asio::ip::udp::endpoint remote_endpoint;
 						remote_endpoint = boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(TrueGateway->GetGatewayIp().c_str()), 9494);
 						socket_.send_to(boost::asio::buffer(*message1), remote_endpoint);
