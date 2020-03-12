@@ -17,6 +17,9 @@ public:
 	~XiaomiGateway(void);
 	bool WriteToHardware(const char *pdata, const unsigned char length) override;
 
+	int	WriteToGeneralSwitch(const tRBUF *pCmd,  Json::Value& json);
+	int WriteToColorSwitch(const tRBUF *pCmd,  Json::Value& json);
+
 	int GetGatewayHardwareID(){ return m_HwdID; };
 	std::string GetGatewayIp(){ return m_GatewayIp; };
 	std::string GetGatewaySid(){ if (m_GatewaySID == "") m_GatewaySID = XiaomiGatewayTokenManager::GetInstance().GetSID(m_GatewayIp); return m_GatewaySID; };
@@ -25,11 +28,14 @@ public:
 	void SetAsMainGateway(){ m_ListenPort9898 = true; };
 	void UnSetMainGateway(){ m_ListenPort9898 = false; };
 
-
+	int GetUincastPort();
+	void SetUincastPort(int port);
 	int GetSsidBySid(const int devType, const int subType, const int sID);
 	int GetSsidBySid(const int devType, const int subType, const std::string& sid);
 	std::string GetDeviceIdBySsid(const int devType, const int subType, unsigned int rowId);
 	void SetSsidMacMap(const int ssid, const std::string & mac);
+	std::string GetMacBySsid(const int ssid);
+
 
 
 private:
@@ -74,6 +80,7 @@ private:
 	uint8_t m_GatewayBrightnessInt; //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
 	std::string m_GatewaySID;
 	std::string m_GatewayIp;
+	int m_GatewayUPort;
 	std::string m_LocalIp;
 	std::string m_GatewayPassword;
 	std::string m_GatewayMusicId;
@@ -102,6 +109,7 @@ private:
 		char data_[max_length];
 		int m_HardwareID;
 		std::string m_gatewayip;
+		int m_uincastport;
 		std::string m_localip;
 		bool m_OutputMessage;
 		bool m_IncludeVoltage;
