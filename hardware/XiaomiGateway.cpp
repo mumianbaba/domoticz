@@ -198,7 +198,7 @@ void XiaomiGateway::SetUincastPort(int port)
 int XiaomiGateway::GetSsidBySid(const int devType, const int subType, const std::string& sid)
 {
 	int sID = GetShortID(sid);
-	GetSsidBySid(devType, subType, sID);
+	return GetSsidBySid(devType, subType, sID);
 
 }
 int XiaomiGateway::GetSsidBySid(const int devType, const int subType, const int sID)
@@ -290,13 +290,139 @@ int XiaomiGateway::GetSsidBySid(const int devType, const int subType, const int 
 	return sSID;
 }
 
+bool XiaomiGateway::GetDeviceTypeByModel(const std::string & model, int &devType,  int &subType)
+{
+	bool result = false;
+	if (model == "motion" || model == "sensor_motion.aq2")
+	{
+		devType = pTypeGeneralSwitch;
+		subType = STYPE_Motion;
+		result = true;
+	}
+	else if ((model == "magnet") || (model == "sensor_magnet.aq2"))
+	{
+		devType = pTypeGeneralSwitch;
+		subType = STYPE_Contact;
+		result = true;
+	}
+	else if (model == "sensor_ht" || model == "weather.v1" || model == "weather")
+	{
+		devType = pTypeWEATHER;
+		subType = sTypeWEATHER1;
+		result = true;
+	}
+	/* 状态型 */
+	else if (model == "plug" || model == "plug.maeu01" ||
+	model == "86plug" || model == "ctrl_86plug.aq1" ||
+	model == "ctrl_neutral1" || model == "ctrl_ln1" || model == "ctrl_ln1.aq1" ||
+	model == "ctrl_neutral2" || model == "ctrl_ln2" || model == "ctrl_ln2.aq1")
+	{
+		devType = pTypeGeneralSwitch;
+		subType = STYPE_OnOff;
+		result = true;
+	}
+	/* 动作型 */
+	else if ((model == "switch") || (model == "remote.b1acn01") ||
+	model == "sensor_switch.aq2" ||
+	model == "sensor_switch.aq3" ||
+	model == "86sw1" || model == "remote.b186acn01" || model == "sensor_86sw1.aq1" ||
+	model == "86sw2" || model == "remote.b286acn01" || model == "sensor_86sw1.aq1")
+	{
+		devType = pTypeGeneralSwitch;
+		subType = STYPE_Selector;
+		result = true;
+	}
+	/* 动作型 */
+	else if (model == "cube" || model == "sensor_cube.aqgl01")
+	{
+		devType = pTypeGeneralSwitch;
+		subType = STYPE_Selector;
+		result = true;
+	}
+	/* 动作型 */
+	else if (model == "vibration" || model == "vibration.aq1")
+	{
+		devType = pTypeGeneralSwitch;
+		subType = STYPE_Selector;
+		result = true;
+	}
+	else if (model == "smoke" || model == "natgas" ||
+	model == "sensor_wleak.aq1")
+	{
+		devType = pTypeGeneralSwitch;
+		subType = STYPE_SMOKEDETECTOR;
+		result = true;
+	}
+	else if (model == "curtain")
+	{
+		devType = pTypeGeneralSwitch;
+		subType = STYPE_BlindsPercentage;
+		result = true;
+	}
+	else if (model == "dimmer.rgbegl01" || model == "light.aqcn02")
+	{
+		devType = pTypeColorSwitch;
+		subType = sTypeColor_CW_WW;
+		result = true;
+	}
+	else if (model == "gateway" || model == "gateway.v3" || model == "acpartner.v3" || model == "tenbay_gw" || model == "tenbay_gw")
+	{
+		devType = pTypeGeneralSwitch;
+		subType = STYPE_OnOff;
+		result = true;
+	}
+	return result;
+}
 
 
-void XiaomiGateway::SetSsidMacMap(const int ssid, const std::string & mac)
+void XiaomiGateway::SetDeviceInfo(const int ssid, const std::string & mac, const std::string & model)
+{
+#if 0
+
+	bool found = false;
+	std::unique_lock<std::mutex> lock(m_mutex);
+	for (unsigned i = 0; i < m_DevInfo.size(); i++) {
+		if (boost::get<0>(m_DevInfo[i]) == ssid) {
+
+			if (model != "")
+			{
+				boost::get<1>(m_DevInfo[i]) = model;
+			}
+			if (mac != ""){
+				boost::get<2>(m_DevInfo[i]) = mac;
+			}
+			found = true;
+		}
+	}
+	if (!found) {
+		m_DevInfo.push_back(boost::make_tuple(ssid, model, mac));
+	}
+#endif
+
+}
+
+void XiaomiGateway::SetDeviceInfo(const std::string & model, const std::string & mac)
+{
+#if 0
+	bool found = false;
+	std::unique_lock<std::mutex> lock(m_mutex);
+	for (unsigned i = 0; i < m_DevInfo.size(); i++) {
+		if (boost::get<1>(m_DevInfo[i]) == model) {
+			boost::get<2>(m_DevInfo[i]) = mac;
+			found = true;
+		}
+	}
+	if (!found) {
+		m_DevInfo.push_back(boost::make_tuple(ssid, model, mac));
+	}
+#endif
+}
+
+void XiaomiGateway::SetSsidMacMap(const int ssid, const std::string& mac)
 {
 	if (m_sIDMap.find(ssid) == m_sIDMap.end())
 	{
-		m_sIDMap[ssid] = mac;
+		 m_sIDMap[ssid] = mac;
 	}
 }
 
@@ -2049,7 +2175,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 						//TrueGateway->InsertUpdateRGBLight(sid, name, sTypeColor_CW_WW, ColorModeTemp, it, oldbrightness, false, action, battery);
 					}
 
-					if (brgb || bb)
+					if (bb)
 					{
 						TrueGateway->InsertUpdateRGBLight(sid, name, sTypeColor_CW_WW, ColorModeRGB, irgb, ib, false, action, battery);
 					}
@@ -2146,11 +2272,27 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 			else if (cmd == xiaomi::rsp_discorey)
 			{
 				Json::Value list = root["dev_list"];
-				std::string sid; 
+				std::string sid = "";
+				std::string model = "";
+				int devtype = 0;
+				int subtype = 0;
+				int ssid = 0;
 				if ((ret) || (!list.isObject()))
 				{
 					for (int i = 0; i < (int)list.size(); i++) {
+
 						sid = list[i]["sid"].asString();
+						model = list[i]["model"].asString();
+						if (sid == "" || model == ""){
+							continue;
+						}
+						bool ret = TrueGateway->GetDeviceTypeByModel(model, devtype, subtype);
+						if (ret == false){
+							continue;
+						}
+						ssid = TrueGateway->GetSsidBySid(devtype, subtype, sid);
+						TrueGateway->SetSsidMacMap(ssid, sid);
+
 						std::string message = "{\"cmd\" : \"read\",\"sid\":\"";
 						message.append(sid.c_str());
 						message.append("\"}");

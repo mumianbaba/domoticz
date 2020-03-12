@@ -30,11 +30,15 @@ public:
 
 	int GetUincastPort();
 	void SetUincastPort(int port);
+
+	bool GetDeviceTypeByModel(const std::string & model, int &devType,  int &subType);
 	int GetSsidBySid(const int devType, const int subType, const int sID);
 	int GetSsidBySid(const int devType, const int subType, const std::string& sid);
 	std::string GetDeviceIdBySsid(const int devType, const int subType, unsigned int rowId);
 	void SetSsidMacMap(const int ssid, const std::string & mac);
 	std::string GetMacBySsid(const int ssid);
+	void SetDeviceInfo(const int ssid, const std::string & mac, const std::string & model);
+	void SetDeviceInfo(const std::string & model, const std::string & mac);
 
 
 
@@ -65,6 +69,7 @@ private:
 
 
 	std::map<int, std::string> m_sIDMap;
+	std::vector<boost::tuple<int, std::string, std::string> > m_DevInfo;
 	bool m_bDoRestart;
 	std::shared_ptr<std::thread> m_thread;
 	std::shared_ptr<std::thread> m_udp_thread;
