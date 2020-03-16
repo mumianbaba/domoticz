@@ -392,6 +392,11 @@ SDK version 4.9
 	changed; #define recType43392 0x53  to   #define trxType43392 0x53
 */
 
+
+#define pTypeMannageDevice 0x33
+#define sTypeAddDevice   0x01
+#define sTypeRmDevice   0x02
+
 //types for Interface Control
 #define pTypeInterfaceControl 0x00
 #define sTypeInterfaceCommand 0x00
@@ -2691,6 +2696,24 @@ typedef union tRBUF {
 		BYTE	uint_lsb;
 	} pulse[124];
     } RAW;
+
+    struct {
+	BYTE	packetlength;
+	BYTE	packettype;
+	BYTE	subtype;
+	BYTE	seqnbr;
+	BYTE	cmnd;
+	BYTE	id1;
+	BYTE	id2;
+	BYTE	id3;
+	BYTE	id4;
+	BYTE	uincode;
+	BYTE	value0;
+	BYTE	value1;
+	BYTE	value2;
+	BYTE	value3;
+    } MANNAGE;
+
 } RBUF;
 
 #endif //_RXFCOMLIB_F11DD459_E67E_4B26_8E44_B964E99304BF

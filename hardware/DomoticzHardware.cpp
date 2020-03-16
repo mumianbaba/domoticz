@@ -726,7 +726,7 @@ void CDomoticzHardwareBase::SendBlindSensor(const uint8_t NodeID, const uint8_t 
 }
 
 
-void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const uint8_t mode , const int value, const int brightness, const int BatteryLevel, const std::string& defaultname)
+void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const uint8_t mode , const int value, const int brightness, const int cmd, const int BatteryLevel, const std::string& defaultname)
 {
 	uint8_t subType = SubType;
 	if (SubType < sTypeColor_RGB_W || SubType > sTypeColor_CW_WW)
@@ -742,6 +742,11 @@ void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Child
 	_tColor color;
 	int   ival = brightness;
 
+
+	//Send as ColorSwitch
+	_tColorSwitch lcmd;
+
+	lcmd.command = cmd;
 	switch(mode)
 	{
 		case ColorModeWhite:
@@ -768,20 +773,12 @@ void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Child
 	ival = std::max(ival, 0);
 	ival = std::min(ival, 100);
 
-	//Send as ColorSwitch
-	_tColorSwitch lcmd;
+
 	lcmd.id = NodeID;
 	lcmd.dunit = ChildID;
 	lcmd.subtype = subType;
 	lcmd.value = ival;
-	lcmd.command = Color_SetColor;
-	if (ival <= 0)
-		lcmd.command = Color_LedOff;
-	else
-		lcmd.command = Color_LedOn;
-	//lcmd.color = color;
-	//sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
-
+	lcmd.color = color;
 	sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
 }
 

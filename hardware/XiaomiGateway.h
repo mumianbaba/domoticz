@@ -19,6 +19,7 @@ public:
 
 	int	WriteToGeneralSwitch(const tRBUF *pCmd,  Json::Value& json);
 	int WriteToColorSwitch(const tRBUF *pCmd,  Json::Value& json);
+	int WriteToMannageDeive(const tRBUF *pCmd,  Json::Value& json);
 
 	int GetGatewayHardwareID(){ return m_HwdID; };
 	std::string GetGatewayIp(){ return m_GatewayIp; };
@@ -31,14 +32,15 @@ public:
 	int GetUincastPort();
 	void SetUincastPort(int port);
 
-	bool GetDeviceTypeByModel(const std::string & model, int &devType,  int &subType);
-	int GetSsidBySid(const int devType, const int subType, const int sID);
-	int GetSsidBySid(const int devType, const int subType, const std::string& sid);
-	std::string GetDeviceIdBySsid(const int devType, const int subType, unsigned int rowId);
-	void SetSsidMacMap(const int ssid, const std::string & mac);
-	std::string GetMacBySsid(const int ssid);
-	void SetDeviceInfo(const int ssid, const std::string & mac, const std::string & model);
-	void SetDeviceInfo(const std::string & model, const std::string & mac);
+	bool         GetDeviceTypeByModel(const std::string & model, int &devType,  int &subType);
+	int          GetSsidBySid(const int devType, const int subType, const int sID);
+	int          GetSsidBySid(const int devType, const int subType, const std::string& sid);
+	std::string  GetDeviceIdBySsid(const int devType, const int subType, unsigned int rowId);
+	unsigned int GetSsidByDeviceId(const int devType, const int subType, const std::string& deviceID);
+	void         SetSsidMacMap(const int ssid, const std::string & mac);
+	std::string  GetMacBySsid(const int ssid);
+	void         SetDeviceInfo(const int ssid, const std::string & mac, const std::string & model);
+	void         SetDeviceInfo(const std::string & model, const std::string & mac);
 
 
 
@@ -49,9 +51,7 @@ private:
 
 	bool SendMessageToGateway(const std::string &controlmessage);
 	void InsertUpdateSwitch(const std::string &nodeid, const std::string &Name, const bool bIsOn, const _eSwitchType switchtype, const int unittype, const int level, const std::string &messagetype, const std::string &load_power, const std::string &power_consumed, const int battery);
-	//void InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const std::string& Hex, const std::string& Brightness, const bool bIsWhite, const int Action, const int battery);
-	//void InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const unsigned char Mode, const int Value, const std::string& Brightness, const bool bIsWhite, const int Action, const int battery);
-	void InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const unsigned char Mode, const int Value, const int Brightness, const bool bIsWhite, const int Action, const int battery);
+	void InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const unsigned char Mode, const std::string& Color, const std::string& Brightness, const bool bIsWhite,  const int battery);
 
 	void InsertUpdateRGBGateway(const std::string &nodeid, const std::string &Name, const bool bIsOn, const int brightness, const int hue);
 	void InsertUpdateCubeText(const std::string &nodeid, const std::string &Name, const std::string &degrees);

@@ -6859,6 +6859,7 @@ void CSQLHelper::DeleteEvent(const std::string &idx)
 //Argument, one or multiple devices separated by a semicolumn (;)
 void CSQLHelper::DeleteDevices(const std::string &idx)
 {
+	m_mainworker.DeleteDevice(idx);
 	std::vector<std::string> _idx;
 	StringSplit(idx, ";", _idx);
 	if (_idx.empty())
@@ -6941,7 +6942,6 @@ void CSQLHelper::DeleteDevices(const std::string &idx)
 		}
 	}
 #endif
-
 	m_notifications.ReloadNotifications();
 }
 

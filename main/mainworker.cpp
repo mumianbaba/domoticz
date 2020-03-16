@@ -198,6 +198,105 @@ namespace tcp {
 	} //namespace server
 } //namespace tcp
 
+
+
+static unsigned int GetSsidByDeviceId(const int devType, const int subType, const std::string& deviceID)
+{
+	unsigned int ssid = 0;
+
+	switch (devType)
+	{
+		case pTypeRAIN:
+		case pTypeWIND:
+		case pTypeTEMP:
+		case pTypeHUM:
+		case pTypeTEMP_HUM:
+		case pTypeTEMP_HUM_BARO:
+		case pTypeTEMP_BARO:
+		case pTypeTEMP_RAIN:
+		case pTypeUV:
+		case pTypePOWER:
+		{
+			ssid = std::stoi(deviceID, 0, 10);
+		}
+		break;
+
+
+		case pTypeColorSwitch:
+		case pTypeGeneralSwitch:
+		{
+			ssid = std::stoi(deviceID, 0, 16);
+		}
+		break;
+
+		case pTypeGeneral:
+		{
+			if (
+				(subType == sTypeVoltage) ||
+				(subType == sTypeCurrent) ||
+				(subType == sTypePercentage) ||
+				(subType == sTypeWaterflow) ||
+				(subType == sTypePressure) ||
+				(subType == sTypeZWaveClock) ||
+				(subType == sTypeZWaveThermostatMode) ||
+				(subType == sTypeZWaveThermostatFanMode) ||
+				(subType == sTypeZWaveThermostatOperatingState) ||
+				(subType == sTypeFan) ||
+				(subType == sTypeTextStatus) ||
+				(subType == sTypeSoundLevel) ||
+				(subType == sTypeBaro) ||
+				(subType == sTypeDistance) ||
+				(subType == sTypeSoilMoisture) ||
+				(subType == sTypeCustom) ||
+				(subType == sTypeKwh) ||
+				(subType == sTypeZWaveAlarm)
+				)
+			{
+				ssid = std::stoi(deviceID, 0, 16);
+			}
+			else
+			{
+				ssid = std::stoi(deviceID, 0, 10);
+			}
+		}
+		break;
+
+
+		case pTypeHomeConfort:
+		{
+			ssid = std::stoi(deviceID, 0, 16);
+		}
+		break;
+
+		case pTypeUsage:
+		{
+			ssid = std::stoi(deviceID, 0, 16);
+		}
+		break;
+
+		case pTypeLux:
+		{
+			ssid = std::stoi(deviceID, 0, 16);
+		}
+		break;
+
+
+		case pTypeWEATHER:
+		{
+			ssid = std::stoi(deviceID, 0, 16);
+		}
+		break;
+
+		default:
+			_log.Log(LOG_ERROR, "GetSsidByDeviceId unkown device type:%d subtype:%d\n", devType, subType);
+		break;		
+	}
+	return ssid;
+}
+
+
+
+
 MainWorker::MainWorker()
 {
 	m_SecCountdown = -1;
@@ -11291,6 +11390,62 @@ bool MainWorker::GetSensorData(const uint64_t idx, int& nValue, std::string& sVa
 		sValue = szTmp;
 	}
 	return true;
+}
+
+bool MainWorker::DeleteDevice(const std::string& idx)
+{
+	std::cout<<"MainWorker DeleteDevice idx:"<<idx<<std::endl;
+	bool res = true;
+	//Get Device details
+	std::vector<std::vector<std::string> > result;
+	result = m_sql.safe_query(
+		"SELECT HardwareID, DeviceID,Unit,Type,SubType,SwitchType,StrParam1,nValue FROM DeviceStatus WHERE (ID == '%q')",
+		idx.c_str());
+	if (result.empty())
+	{
+		std::cout<<"MainWorker DeleteDevice idx not find"<<std::endl;
+		return false;
+	}
+
+	std::vector<std::string> sd = result[0];
+	int HardwareID = atoi(sd[0].c_str());
+
+	std::string DevicId = sd[1];
+	int Uint =  atoi(sd[2].c_str());
+	int Type =  atoi(sd[3].c_str());
+	int SubType =  atoi(sd[4].c_str());
+	int ssid = 0;
+
+	int hindex = FindDomoticzHardware(HardwareID);
+	if (hindex == -1)
+		return false;
+
+	CDomoticzHardwareBase* pHardware = GetHardware(HardwareID);
+	if (pHardware == NULL)
+		return false;
+
+	tRBUF tcmd;
+	tcmd.MANNAGE.packetlength = sizeof(tcmd.ICMND);
+	tcmd.MANNAGE.packettype = pTypeMannageDevice;
+	tcmd.MANNAGE.subtype = sTypeRmDevice; 
+	tcmd.MANNAGE.cmnd = 1;
+	ssid = GetSsidByDeviceId(Type, SubType, DevicId);
+
+	tcmd.MANNAGE.id1 = (unsigned char)((ssid>>24) & 0xff);
+	tcmd.MANNAGE.id2 = (unsigned char)((ssid>>16) & 0xff);
+	tcmd.MANNAGE.id3 = (unsigned char)((ssid>>8) & 0xff);
+	tcmd.MANNAGE.id4 = (unsigned char)((ssid) & 0xff);
+
+	tcmd.MANNAGE.value1 = (unsigned char)(Type & 0xff);
+	tcmd.MANNAGE.value2 = (unsigned char)(SubType & 0xff);
+	tcmd.MANNAGE.value3 = (unsigned char)(Uint & 0xff);
+
+	std::cout<<"MainWorker DeleteDevice devid: "<<DevicId<<"  Uint:"<<Uint<<" Type:"<<Type<<" SubType:"<<SubType<<" ssid:"<<ssid<<std::endl;
+
+	res = WriteToHardware(HardwareID, (const char*)&tcmd, sizeof(tcmd.ICMND));
+	std::cout<<"MainWorker DeleteDevice end res:"<<res<<std::endl;
+	return res;
+
 }
 
 bool MainWorker::SwitchLightInt(const std::vector<std::string>& sd, std::string switchcmd, int level, const _tColor color, const bool IsTesting, const std::string& User)
