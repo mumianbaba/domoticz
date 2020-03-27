@@ -10,6 +10,22 @@
 
 #define MAX_LOG_LINE_LENGTH (2048*3)
 
+#define SP_MODLE  		0  //string
+#define SP_NAME   		1  //string
+#define SP_TYPE   		2  //int
+#define SP_SUBTYPE   	3  //int
+#define SP_SWTYPE   	4  //int
+#define SP_UINT   		5  //int
+#define SP_OPT   		6  //string
+
+
+#define DY_SSID   		0
+#define DY_MODLE  		1
+#define DY_MAC   	 	2
+#define DY_DEVICEID  	3
+
+
+
 class XiaomiGateway : public CDomoticzHardwareBase
 {
 public:
@@ -29,19 +45,39 @@ public:
 	void SetAsMainGateway(){ m_ListenPort9898 = true; };
 	void UnSetMainGateway(){ m_ListenPort9898 = false; };
 
+
+	void RegisterSupportDevice(const std::string & model, const std::string & name,
+											const int type, const int subtype, const int swtype, const int uint,
+											const std::string & devopt);
 	int GetUincastPort();
 	void SetUincastPort(int port);
 
-	bool         GetDeviceTypeByModel(const std::string & model, int &devType,  int &subType);
+	std::vector<std::vector<std::string>>  GetDeviceInfoByModel(const std::string & model);
+
 	int          GetSsidBySid(const int devType, const int subType, const int sID);
 	int          GetSsidBySid(const int devType, const int subType, const std::string& sid);
 	std::string  GetDeviceIdBySsid(const int devType, const int subType, unsigned int rowId);
 	unsigned int GetSsidByDeviceId(const int devType, const int subType, const std::string& deviceID);
-	void         SetSsidMacMap(const int ssid, const std::string & mac);
-	std::string  GetMacBySsid(const int ssid);
-	void         SetDeviceInfo(const int ssid, const std::string & mac, const std::string & model);
-	void         SetDeviceInfo(const std::string & model, const std::string & mac);
+	void 		 SetDeviceInfo(const std::string & mac, const std::string & model);
 
+	std::string  GetDeviceMac(const int ssid);
+	std::string  GetDeviceModel(const int ssid);
+	std::string  GetDeviceModel(const std::string& mac);
+	int 		 GetDeviceSsid(const std::string& mac);
+	std::string  GetDeviceId(const std::string& mac);
+	std::string  GetDeviceId(const int ssid);
+	bool 		 IsDevInfoInited(){return m_bDevInfoInited;}
+	void 		 SetDevInfoInited(bool flag){m_bDevInfoInited=flag;}
+
+
+	void CreateNewDevice();
+	void CreateNewDevice(const std::string& model, const std::string& mac);
+
+
+public:
+	static std::vector<boost::tuple<std::string, std::string, int, int, int, int, std::string> >  m_SpDevice;
+private:
+	bool m_bDevInfoInited;
 
 
 private:
@@ -61,15 +97,15 @@ private:
 	void InsertUpdateTemperature(const std::string &nodeid, const std::string &Name, const float Temperature, const int battery);
 	void InsertUpdateHumidity(const std::string &nodeid, const std::string &Name, const int Humidity, const int battery);
 	void InsertUpdatePressure(const std::string &nodeid, const std::string &Name, const float Pressure, const int battery);
-	void InsertUpdateTempHumPressure(const std::string &nodeid, const std::string &Name, const float Temperature, const int Humidity, const float Pressure, const int battery);
+	void InsertUpdateTempHumPressure(const std::string &nodeid, const std::string &Name, const std::string& Temperature, const std::string& Humidity, const std::string& Pressure, const int battery);
+
 	void InsertUpdateTempHum(const std::string &nodeid, const std::string &Name, const float Temperature, const int Humidity, const int battery);
 
 	std::string GetGatewayKey();
 	unsigned int GetShortID(const std::string & nodeid);
 
 
-	std::map<int, std::string> m_sIDMap;
-	std::vector<boost::tuple<int, std::string, std::string> > m_DevInfo;
+	std::vector<boost::tuple<int, std::string, std::string, std::string> > m_DevInfo;
 	bool m_bDoRestart;
 	std::shared_ptr<std::thread> m_thread;
 	std::shared_ptr<std::thread> m_udp_thread;
@@ -103,8 +139,10 @@ private:
 	public:
 		xiaomi_udp_server(boost::asio::io_service & io_service, int m_HwdID, const std::string &gatewayIp, const std::string &localIp, const bool listenPort9898, const bool outputMessage, const bool includeVolage, XiaomiGateway *parent);
 		~xiaomi_udp_server();
+		void whois(void);
 
 	private:
+
 		void start_receive();
 		void handle_receive(const boost::system::error_code& error, std::size_t /*bytes_transferred*/);
 

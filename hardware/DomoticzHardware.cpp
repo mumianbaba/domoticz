@@ -577,13 +577,13 @@ void CDomoticzHardwareBase::SendMeterSensor(const int NodeID, const int ChildID,
 	sDecodeRXMessage(this, (const unsigned char*)& tsen.RFXMETER, defaultname.c_str(), BatteryLevel);
 }
 
-void CDomoticzHardwareBase::SendLuxSensor(const uint8_t NodeID, const uint8_t ChildID, const uint8_t BatteryLevel, const float Lux, const std::string& defaultname)
+void CDomoticzHardwareBase::SendLuxSensor(const int NodeID, const uint8_t ChildID, const uint8_t BatteryLevel, const float Lux, const std::string& defaultname)
 {
 	_tLightMeter lmeter;
-	lmeter.id1 = 0;
-	lmeter.id2 = 0;
-	lmeter.id3 = 0;
-	lmeter.id4 = NodeID;
+	lmeter.id1 = (BYTE)((NodeID & 0xFF000000) >> 24);
+	lmeter.id2 = (BYTE)((NodeID & 0x00FF0000) >> 16);
+	lmeter.id3 = (BYTE)((NodeID & 0x0000FF00) >> 8);
+	lmeter.id4 = (BYTE)(NodeID & 0x000000FF);
 	lmeter.dunit = ChildID;
 	lmeter.fLux = Lux;
 	lmeter.battery_level = BatteryLevel;

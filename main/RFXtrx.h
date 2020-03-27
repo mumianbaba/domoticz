@@ -2712,6 +2712,7 @@ typedef union tRBUF {
 	BYTE	value1;
 	BYTE	value2;
 	BYTE	value3;
+	BYTE    str[128];
     } MANNAGE;
 
 } RBUF;

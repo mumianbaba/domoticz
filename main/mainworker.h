@@ -26,6 +26,7 @@ public:
 	bool Start();
 	bool Stop();
 
+	void InsertBuiltInTypeHardware();
 	void AddAllDomoticzHardware();
 	void StopDomoticzHardware();
 	void StartDomoticzHardware();
@@ -52,6 +53,7 @@ public:
 	void DecodeRXMessage(const CDomoticzHardwareBase *pHardware, const uint8_t *pRXCommand, const char *defaultName, const int BatteryLevel);
 	void PushAndWaitRxMessage(const CDomoticzHardwareBase *pHardware, const uint8_t *pRXCommand, const char *defaultName, const int BatteryLevel);
 
+	bool AddZigbeeDevice(const std::string& idx, const std::string& model);
 	bool DeleteDevice(const std::string& idx);
 	bool SwitchLight(const std::string &idx, const std::string &switchcmd, const std::string &level, const std::string &color, const std::string &ooc, const int ExtraDelay, const std::string& User);
 	bool SwitchLight(const uint64_t idx, const std::string &switchcmd, const int level, const _tColor color, const bool ooc, const int ExtraDelay, const std::string& User);

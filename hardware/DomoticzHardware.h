@@ -88,7 +88,7 @@ protected:
 	void SendKwhMeter(const int NodeID, const int ChildID, const int BatteryLevel, const double musage, const double mtotal, const std::string &defaultname);
 	void SendWattMeter(const uint8_t NodeID, const uint8_t ChildID, const int BatteryLevel, const float musage, const std::string &defaultname);
 	double GetKwhMeter(const int NodeID, const int ChildID, bool &bExists);
-	void SendLuxSensor(const uint8_t NodeID, const uint8_t ChildID, const uint8_t BatteryLevel, const float Lux, const std::string &defaultname);
+	void SendLuxSensor(const int NodeID, const uint8_t ChildID, const uint8_t BatteryLevel, const float Lux, const std::string &defaultname);
 	void SendAirQualitySensor(const uint8_t NodeID, const uint8_t ChildID, const int BatteryLevel, const int AirQuality, const std::string &defaultname);
 	void SendUsageSensor(const uint8_t NodeID, const uint8_t ChildID, const int BatteryLevel, const float Usage, const std::string &defaultname);
 	void SendSwitchUnchecked(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const bool bOn, const double Level, const std::string &defaultname, const int RssiLevel = 12);

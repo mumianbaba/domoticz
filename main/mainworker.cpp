@@ -289,7 +289,7 @@ static unsigned int GetSsidByDeviceId(const int devType, const int subType, cons
 
 		default:
 			_log.Log(LOG_ERROR, "GetSsidByDeviceId unkown device type:%d subtype:%d\n", devType, subType);
-		break;		
+		break;
 	}
 	return ssid;
 }
@@ -353,6 +353,18 @@ MainWorker::~MainWorker()
 {
 	Stop();
 }
+
+
+void MainWorker::InsertBuiltInTypeHardware()
+{
+	std::vector<std::vector<std::string> > result;
+	result = m_sql.safe_query("SELECT Enabled FROM Hardware WHERE (Type==%d) AND (Address=='%q')", HTYPE_XiaomiGateway, "127.0.0.1");
+	if (result.empty())
+	{
+		m_sql.safe_query("INSERT INTO Hardware (Name, Enabled, Type, Address, Port, SerialPort, Username, Password, Extra, Mode1, Mode2, Mode3, Mode4, Mode5, Mode6) VALUES ('Tenbay gateway',1, %d,'127.0.0.1',9494, '9494','','','',0,0,0,0,0,0)", HTYPE_XiaomiGateway);
+	}
+}
+
 
 void MainWorker::AddAllDomoticzHardware()
 {
@@ -1232,6 +1244,8 @@ bool MainWorker::Start()
 		m_pluginsystem.StartPluginSystem();
 	}
 #endif
+
+	InsertBuiltInTypeHardware();
 	AddAllDomoticzHardware();
 	m_fibaropush.Start();
 	m_httppush.Start();
@@ -4030,7 +4044,8 @@ void MainWorker::decode_TempHumBaro(const CDomoticzHardwareBase* pHardware, cons
 	uint8_t subType = pResponse->TEMP_HUM_BARO.subtype;
 	sprintf(szTmp, "%d", (pResponse->TEMP_HUM_BARO.id1 * 256) + pResponse->TEMP_HUM_BARO.id2);
 	std::string ID = szTmp;
-	uint8_t Unit = pResponse->TEMP_HUM_BARO.id2;
+	//uint8_t Unit = pResponse->TEMP_HUM_BARO.id2;
+	uint8_t Unit = 1;
 	uint8_t cmnd = 0;
 	uint8_t SignalLevel = pResponse->TEMP_HUM_BARO.rssi;
 	uint8_t BatteryLevel;
@@ -11427,7 +11442,7 @@ bool MainWorker::DeleteDevice(const std::string& idx)
 	tRBUF tcmd;
 	tcmd.MANNAGE.packetlength = sizeof(tcmd.ICMND);
 	tcmd.MANNAGE.packettype = pTypeMannageDevice;
-	tcmd.MANNAGE.subtype = sTypeRmDevice; 
+	tcmd.MANNAGE.subtype = sTypeRmDevice;
 	tcmd.MANNAGE.cmnd = 1;
 	ssid = GetSsidByDeviceId(Type, SubType, DevicId);
 
@@ -11446,6 +11461,41 @@ bool MainWorker::DeleteDevice(const std::string& idx)
 	std::cout<<"MainWorker DeleteDevice end res:"<<res<<std::endl;
 	return res;
 
+}
+
+bool MainWorker::AddZigbeeDevice(const std::string& idx, const std::string& model)
+{
+	std::cout<<"MainWorker AddZigbeeDevice idx:"<<idx<<"  model:"<<model<<std::endl;
+	bool res = true;
+
+	int HardwareID = atoi(idx.c_str());
+
+	int hindex = FindDomoticzHardware(HardwareID);
+	if (hindex == -1)
+		return false;
+
+	CDomoticzHardwareBase* pHardware = GetHardware(HardwareID);
+	if (pHardware == NULL)
+		return false;
+
+	tRBUF tcmd;
+	tcmd.MANNAGE.packetlength = sizeof(tcmd.ICMND);
+	tcmd.MANNAGE.packettype = pTypeMannageDevice;
+	tcmd.MANNAGE.subtype = sTypeAddDevice;
+	tcmd.MANNAGE.cmnd = 1;
+
+
+	tcmd.MANNAGE.id1 = 0;
+	tcmd.MANNAGE.id2 = 0;
+	tcmd.MANNAGE.id3 = 0;
+	tcmd.MANNAGE.id4 = 0;
+
+	memset (tcmd.MANNAGE.str, 0, sizeof(tcmd.MANNAGE.str));
+	strncpy ((char*)&tcmd.MANNAGE.str[0], model.c_str(), sizeof(tcmd.MANNAGE.str)-1);
+
+	res = WriteToHardware(HardwareID, (const char*)&tcmd, sizeof(tcmd.ICMND));
+	std::cout<<"MainWorker AddZigbeeDevice end res:"<<res<<std::endl;
+	return res;
 }
 
 bool MainWorker::SwitchLightInt(const std::vector<std::string>& sd, std::string switchcmd, int level, const _tColor color, const bool IsTesting, const std::string& User)

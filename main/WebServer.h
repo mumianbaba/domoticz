@@ -137,6 +137,9 @@ private:
 	void Cmd_PingerUpdateNode(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_PingerRemoveNode(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_PingerClearNodes(WebEmSession & session, const request& req, Json::Value &root);
+
+	void Cmd_AddZigbeeDevice(WebEmSession & session, const request& req, Json::Value &root);
+
 	void Cmd_KodiSetMode(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_KodiGetNodes(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_KodiAddNode(WebEmSession & session, const request& req, Json::Value &root);
