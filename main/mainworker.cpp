@@ -14,6 +14,8 @@
 #include "../httpclient/HTTPClient.h"
 #include "../webserver/Base64.h"
 #include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string.hpp>
+
 #include "../main/json_helper.h"
 
 #include <boost/crc.hpp>
@@ -203,6 +205,7 @@ namespace tcp {
 static unsigned int GetSsidByDeviceId(const int devType, const int subType, const std::string& deviceID)
 {
 	unsigned int ssid = 0;
+	std::string hex;
 
 	switch (devType)
 	{
@@ -217,7 +220,7 @@ static unsigned int GetSsidByDeviceId(const int devType, const int subType, cons
 		case pTypeUV:
 		case pTypePOWER:
 		{
-			ssid = std::stoi(deviceID, 0, 10);
+			ssid = static_cast<unsigned int>(std::stoul(deviceID, 0, 10));
 		}
 		break;
 
@@ -225,7 +228,7 @@ static unsigned int GetSsidByDeviceId(const int devType, const int subType, cons
 		case pTypeColorSwitch:
 		case pTypeGeneralSwitch:
 		{
-			ssid = std::stoi(deviceID, 0, 16);
+			ssid = static_cast<unsigned int>(std::stoul(deviceID, 0, 16));
 		}
 		break;
 
@@ -252,38 +255,22 @@ static unsigned int GetSsidByDeviceId(const int devType, const int subType, cons
 				(subType == sTypeZWaveAlarm)
 				)
 			{
-				ssid = std::stoi(deviceID, 0, 16);
+				ssid = static_cast<unsigned int>(std::stoul(deviceID, 0, 16));
 			}
 			else
 			{
-				ssid = std::stoi(deviceID, 0, 10);
+				ssid = static_cast<unsigned int>(std::stoul(deviceID, 0, 10));
 			}
 		}
 		break;
 
 
 		case pTypeHomeConfort:
-		{
-			ssid = std::stoi(deviceID, 0, 16);
-		}
-		break;
-
 		case pTypeUsage:
-		{
-			ssid = std::stoi(deviceID, 0, 16);
-		}
-		break;
-
 		case pTypeLux:
-		{
-			ssid = std::stoi(deviceID, 0, 16);
-		}
-		break;
-
-
 		case pTypeWEATHER:
 		{
-			ssid = std::stoi(deviceID, 0, 16);
+			ssid = static_cast<unsigned int>(std::stoul(deviceID, 0, 16));
 		}
 		break;
 
@@ -3826,7 +3813,7 @@ void MainWorker::decode_TempHum(const CDomoticzHardwareBase* pHardware, const tR
 	std::string ID;
 	sprintf(szTmp, "%d", (pResponse->TEMP_HUM.id1 * 256) + pResponse->TEMP_HUM.id2);
 	ID = szTmp;
-	uint8_t Unit = 0;
+	uint8_t Unit = 1;
 
 	uint8_t cmnd = 0;
 	uint8_t SignalLevel = pResponse->TEMP_HUM.rssi;
@@ -3850,6 +3837,7 @@ void MainWorker::decode_TempHum(const CDomoticzHardwareBase* pHardware, const tR
 		break;
 	case sTypeTH5:
 	case sTypeTH9:
+		Unit = 1;
 		//no channel
 		break;
 	case sTypeTH7:
@@ -11407,7 +11395,8 @@ bool MainWorker::GetSensorData(const uint64_t idx, int& nValue, std::string& sVa
 	return true;
 }
 
-bool MainWorker::DeleteDevice(const std::string& idx)
+
+bool MainWorker::DeleteSingleDevice(const std::string& idx)
 {
 	std::cout<<"MainWorker DeleteDevice idx:"<<idx<<std::endl;
 	bool res = true;
@@ -11429,7 +11418,7 @@ bool MainWorker::DeleteDevice(const std::string& idx)
 	int Uint =  atoi(sd[2].c_str());
 	int Type =  atoi(sd[3].c_str());
 	int SubType =  atoi(sd[4].c_str());
-	int ssid = 0;
+	unsigned int ssid = 0;
 
 	int hindex = FindDomoticzHardware(HardwareID);
 	if (hindex == -1)
@@ -11438,7 +11427,6 @@ bool MainWorker::DeleteDevice(const std::string& idx)
 	CDomoticzHardwareBase* pHardware = GetHardware(HardwareID);
 	if (pHardware == NULL)
 		return false;
-
 	tRBUF tcmd;
 	tcmd.MANNAGE.packetlength = sizeof(tcmd.ICMND);
 	tcmd.MANNAGE.packettype = pTypeMannageDevice;
@@ -11460,12 +11448,24 @@ bool MainWorker::DeleteDevice(const std::string& idx)
 	res = WriteToHardware(HardwareID, (const char*)&tcmd, sizeof(tcmd.ICMND));
 	std::cout<<"MainWorker DeleteDevice end res:"<<res<<std::endl;
 	return res;
-
 }
 
-bool MainWorker::AddZigbeeDevice(const std::string& idx, const std::string& model)
+bool MainWorker::DeleteDevice(const std::string& idx)
 {
-	std::cout<<"MainWorker AddZigbeeDevice idx:"<<idx<<"  model:"<<model<<std::endl;
+	std::cout<<"MainWorker DeleteDevice idx:"<<idx<<std::endl;
+	bool res = false;
+	std::vector<std::string> result;
+	boost::split(result, idx, boost::is_any_of(";"), boost::token_compress_on);
+	for (const auto & it : result)
+	{
+		res = DeleteSingleDevice(it);
+	}
+	return res;
+}
+
+bool MainWorker::AddZigbeeDevice(const std::string& idx, const std::string& cmd, const std::string& model)
+{
+	std::cout<<"MainWorker AddZigbeeDevice idx:"<<idx<<" cmd:"<<cmd<<"  model:"<<model<<std::endl;
 	bool res = true;
 
 	int HardwareID = atoi(idx.c_str());
@@ -11482,7 +11482,7 @@ bool MainWorker::AddZigbeeDevice(const std::string& idx, const std::string& mode
 	tcmd.MANNAGE.packetlength = sizeof(tcmd.ICMND);
 	tcmd.MANNAGE.packettype = pTypeMannageDevice;
 	tcmd.MANNAGE.subtype = sTypeAddDevice;
-	tcmd.MANNAGE.cmnd = 1;
+	tcmd.MANNAGE.cmnd = (cmd == "On")?1 : 0;
 
 
 	tcmd.MANNAGE.id1 = 0;

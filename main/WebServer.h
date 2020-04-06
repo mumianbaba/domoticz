@@ -94,7 +94,8 @@ public:
 		const bool bFetchFavorites,
 		const time_t LastUpdate,
 		const std::string &username,
-		const std::string &hardwareid = ""); // OTO
+		const std::string &hardwareid = "",
+		const std::string &client = "web"); // OTO
 
 	// SessionStore interface
 	const WebEmStoredSession GetSession(const std::string & sessionId) override;
@@ -391,6 +392,9 @@ private:
 	std::map<int, int> m_custom_light_icons_lookup;
 	bool m_bDoStop;
 	std::string m_server_alias;
+	std::string ConverParams(const request &req, bool isSubDev = false);
+	std::vector<std::string> GetDevicesIdByMac(std::string mac);
+
 };
 
 } //server

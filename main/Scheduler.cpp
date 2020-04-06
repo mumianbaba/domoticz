@@ -1204,13 +1204,23 @@ namespace http {
 
 		void CWebServer::Cmd_AddTimer(WebEmSession & session, const request& req, Json::Value &root)
 		{
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
 			if (session.rights != 2)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
 			}
 
-			std::string idx = request::findValue(&req, "idx");
+			std::string idx;
+			if (!client.empty() && client != "web") {
+				idx = ConverParams(req, false);
+			} else {
+				idx = request::findValue(&req, "idx");
+			}
 			std::string active = request::findValue(&req, "active");
 			std::string stimertype = request::findValue(&req, "timertype");
 			std::string sdate = request::findValue(&req, "date");

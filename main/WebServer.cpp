@@ -1915,11 +1915,11 @@ namespace http {
 			std::string variablename = HTMLSanitizer::Sanitize(request::findValue(&req, "vname"));
 			std::string variablevalue = request::findValue(&req, "vvalue");
 			std::string variabletype = request::findValue(&req, "vtype");
-			
+
 			root["title"] = "AddUserVariable";
 			root["status"] = "ERR";
-			
-			if (!std::isdigit(variabletype[0])) 
+
+			if (!std::isdigit(variabletype[0]))
 			{
 				stdlower(variabletype);
 				if (variabletype == "integer")
@@ -1938,11 +1938,11 @@ namespace http {
 					return;
 				}
 			}
-			
+
 			if (
 				(variablename.empty()) ||
 				(variabletype.empty()) ||
-				((variabletype != "0") && (variabletype != "1") && (variabletype != "2") && (variabletype != "3") && (variabletype != "4")) || 
+				((variabletype != "0") && (variabletype != "1") && (variabletype != "2") && (variabletype != "3") && (variabletype != "4")) ||
 				((variablevalue.empty()) && (variabletype != "2"))
 				)
 			{
@@ -1955,7 +1955,7 @@ namespace http {
 			{
 				root["message"] = errorMessage;
 			}
-			else 
+			else
 			{
 				root["status"] = "OK";
 			}
@@ -1986,16 +1986,16 @@ namespace http {
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
 			}
-			
+
 			std::string idx = request::findValue(&req, "idx");
 			std::string variablename = HTMLSanitizer::Sanitize(request::findValue(&req, "vname"));
 			std::string variablevalue = request::findValue(&req, "vvalue");
 			std::string variabletype = request::findValue(&req, "vtype");
-			
+
 			root["title"] = "UpdateUserVariable";
 			root["status"] = "ERR";
-			
-			if (!std::isdigit(variabletype[0])) 
+
+			if (!std::isdigit(variabletype[0]))
 			{
 				stdlower(variabletype);
 				if (variabletype == "integer")
@@ -2014,11 +2014,11 @@ namespace http {
 					return;
 				}
 			}
-			
+
 			if (
 				(variablename.empty()) ||
 				(variabletype.empty()) ||
-				((variabletype != "0") && (variabletype != "1") && (variabletype != "2") && (variabletype != "3") && (variabletype != "4")) || 
+				((variabletype != "0") && (variabletype != "1") && (variabletype != "2") && (variabletype != "3") && (variabletype != "4")) ||
 				((variablevalue.empty()) && (variabletype != "2"))
 				)
 			{
@@ -2353,37 +2353,64 @@ namespace http {
 				return; //Only admin user allowed
 			}
 
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
 			std::string idx = request::findValue(&req, "idx");
 			std::string sactivetype = request::findValue(&req, "activetype");
-			std::string activeidx = request::findValue(&req, "activeidx");
+			std::string mac;
+			std::vector<std::string> devids;
+			if (!client.empty() && client != "web") {
+				mac = request::findValue(&req, "mac");
+				if (mac.empty()) {
+					return;
+				}
+				// query all device id by mac
+				devids = GetDevicesIdByMac(mac);
+			} else {
+				std::string activeidx = request::findValue(&req, "activeidx");
+				if (!activeidx.empty()) {
+					devids.push_back(activeidx);
+				}
+			}
+
 			if (
 				(idx.empty()) ||
 				(sactivetype.empty()) ||
-				(activeidx.empty())
+				(devids.empty())
 				)
 				return;
 			root["status"] = "OK";
 			root["title"] = "AddPlanActiveDevice";
 
 			int activetype = atoi(sactivetype.c_str());
-
 			//check if it is not already there
 			std::vector<std::vector<std::string> > result;
-			result = m_sql.safe_query("SELECT ID FROM DeviceToPlansMap WHERE (DeviceRowID=='%q') AND (DevSceneType==%d) AND (PlanID=='%q')",
-				activeidx.c_str(), activetype, idx.c_str());
+			result = m_sql.safe_query("SELECT ID FROM DeviceToPlansMap WHERE DeviceRowID IN(%q) AND (DevSceneType==%d) AND (PlanID=='%q')",
+				boost::join(devids, ",").c_str(), activetype, idx.c_str());
 			if (result.empty())
 			{
-				m_sql.safe_query(
-					"INSERT INTO DeviceToPlansMap (DevSceneType,DeviceRowID, PlanID) VALUES (%d,'%q','%q')",
-					activetype,
-					activeidx.c_str(),
-					idx.c_str()
-				);
+				for(const auto idx: devids) {
+					m_sql.safe_query(
+						"INSERT INTO DeviceToPlansMap (DevSceneType,DeviceRowID, PlanID) VALUES (%d,'%q','%q')",
+						activetype,
+						idx.c_str(),
+						idx.c_str()
+						);
+				}
+
 			}
 		}
 
 		void CWebServer::Cmd_GetPlanDevices(WebEmSession & session, const request& req, Json::Value &root)
 		{
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
 			std::string idx = request::findValue(&req, "idx");
 			if (idx.empty())
 				return;
@@ -2427,12 +2454,45 @@ namespace http {
 					}
 					if (Name != "")
 					{
-						root["result"][ii]["idx"] = ID;
-						root["result"][ii]["devidx"] = DevSceneRowID;
-						root["result"][ii]["type"] = DevSceneType;
-						root["result"][ii]["DevSceneRowID"] = DevSceneRowID;
-						root["result"][ii]["order"] = sd[3];
-						root["result"][ii]["Name"] = Name;
+						if (!client.empty() && client != "web") {
+							std::vector<std::vector<std::string> > result2;
+							result2 = m_sql.safe_query("SELECT Mac, Unit FROM DeviceStatus WHERE (ID=='%q')",
+								DevSceneRowID.c_str());
+							if (result2.empty()) {
+								continue;
+							}
+
+							std::string sMac = result2[0][0];
+							std::string sOutlet = result2[0][1];
+							if (sMac.empty() || sOutlet.empty()) {
+								continue;
+							}
+
+							Json::Value device;
+							device["idx"] = ID;
+							device["devidx"] = DevSceneRowID;
+							device["type"] = DevSceneType;
+							device["DevSceneRowID"] = DevSceneRowID;
+							device["order"] = sd[3];
+							device["Name"] = Name;
+							device["Mac"] = sMac;
+							device["Outlet"] = atoi(sOutlet.c_str());
+
+							if (root["result"].isMember(sMac)) {
+								root["result"][sMac].append(device);
+							} else {
+								Json::Value devicesJsonArray;
+								devicesJsonArray.append(device);
+								root["result"][sMac] = devicesJsonArray;
+							}
+						} else {
+							root["result"][ii]["idx"] = ID;
+							root["result"][ii]["devidx"] = DevSceneRowID;
+							root["result"][ii]["type"] = DevSceneType;
+							root["result"][ii]["DevSceneRowID"] = DevSceneRowID;
+							root["result"][ii]["order"] = sd[3];
+							root["result"][ii]["Name"] = Name;
+						}
 						ii++;
 					}
 				}
@@ -2446,12 +2506,38 @@ namespace http {
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
 			}
-			std::string idx = request::findValue(&req, "idx");
-			if (idx.empty())
-				return;
+
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
+			std::string idx;
+			std::string mac;
+			std::vector<std::string> devids;
+			if (!client.empty() && client != "web") {
+				mac = request::findValue(&req, "mac");
+				if (mac.empty()) {
+					return;
+				}
+				// query all device id by mac
+				devids = GetDevicesIdByMac(mac);
+				if (devids.empty())
+					return;
+				for(const auto idx: devids) {
+					m_sql.safe_query("DELETE FROM DeviceToPlansMap WHERE (DeviceRowID == '%q')", idx.c_str());
+				}
+			} else {
+				idx = request::findValue(&req, "idx");
+				if (idx.empty())
+					return;
+				m_sql.safe_query("DELETE FROM DeviceToPlansMap WHERE (ID == '%q')", idx.c_str());
+			}
+
+
 			root["status"] = "OK";
 			root["title"] = "DeletePlanDevice";
-			m_sql.safe_query("DELETE FROM DeviceToPlansMap WHERE (ID == '%q')", idx.c_str());
+
 		}
 
 		void CWebServer::Cmd_SetPlanDeviceCoords(WebEmSession & session, const request& req, Json::Value &root)
@@ -3403,6 +3489,11 @@ namespace http {
 				iUser = FindUser(session.username.c_str());
 			}
 */
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
 			if (cparam == "deleteallsubdevices")
 			{
 				if (session.rights < 2)
@@ -3411,7 +3502,12 @@ namespace http {
 					return; //Only admin user allowed
 				}
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 				if (idx.empty())
 					return;
 				root["status"] = "OK";
@@ -3441,8 +3537,15 @@ namespace http {
 					return; //Only admin user allowed
 				}
 
-				std::string idx = request::findValue(&req, "idx");
-				std::string subidx = request::findValue(&req, "subidx");
+				std::string idx;
+				std::string subidx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+					subidx = ConverParams(req, true);
+				} else {
+					idx = request::findValue(&req, "idx");
+					subidx = request::findValue(&req, "subidx");
+				}
 				if ((idx.empty()) || (subidx.empty()))
 					return;
 				if (idx == subidx)
@@ -3471,8 +3574,13 @@ namespace http {
 					return; //Only admin user allowed
 				}
 
+				std::string devidx;
+				if (!client.empty() && client != "web") {
+					devidx = ConverParams(req, false);
+				} else {
+					devidx = request::findValue(&req, "devidx");
+				}
 				std::string idx = request::findValue(&req, "idx");
-				std::string devidx = request::findValue(&req, "devidx");
 				std::string isscene = request::findValue(&req, "isscene");
 				std::string scommand = request::findValue(&req, "command");
 				int ondelay = atoi(request::findValue(&req, "ondelay").c_str());
@@ -3580,8 +3688,14 @@ namespace http {
 					return; //Only admin user allowed
 				}
 
-				std::string idx = request::findValue(&req, "idx");
-				std::string devidx = request::findValue(&req, "devidx");
+				std::string devidx;
+				if (!client.empty() && client != "web") {
+					devidx = ConverParams(req, false);
+				} else {
+					devidx = request::findValue(&req, "devidx");
+				}
+
+				std::string	idx = request::findValue(&req, "idx");
 				std::string scommand = request::findValue(&req, "command");
 				int ondelay = atoi(request::findValue(&req, "ondelay").c_str());
 				int offdelay = atoi(request::findValue(&req, "offdelay").c_str());
@@ -3634,7 +3748,12 @@ namespace http {
 			}
 			else if (cparam == "getsubdevices")
 			{
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 				if (idx.empty())
 					return;
 
@@ -3669,7 +3788,7 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "GetSceneDevices";
 
-				result = m_sql.safe_query("SELECT a.ID, b.Name, a.DeviceRowID, b.Type, b.SubType, b.nValue, b.sValue, a.Cmd, a.Level, b.ID, a.[Order], a.Color, a.OnDelay, a.OffDelay, b.SwitchType FROM SceneDevices a, DeviceStatus b WHERE (a.SceneRowID=='%q') AND (b.ID == a.DeviceRowID) ORDER BY a.[Order]",
+				result = m_sql.safe_query("SELECT a.ID, b.Name, a.DeviceRowID, b.Type, b.SubType, b.nValue, b.sValue, a.Cmd, a.Level, b.ID, a.[Order], a.Color, a.OnDelay, a.OffDelay, b.SwitchType, b.Mac, b.Unit FROM SceneDevices a, DeviceStatus b WHERE (a.SceneRowID=='%q') AND (b.ID == a.DeviceRowID) ORDER BY a.[Order]",
 					idx.c_str());
 				if (!result.empty())
 				{
@@ -3685,6 +3804,8 @@ namespace http {
 						root["result"][ii]["Order"] = atoi(sd[10].c_str());
 						root["result"][ii]["OnDelay"] = atoi(sd[12].c_str());
 						root["result"][ii]["OffDelay"] = atoi(sd[13].c_str());
+						root["result"][ii]["Mac"] = sd[15];
+						root["result"][ii]["Outlet"] = atoi(sd[16].c_str());
 
 						_eSwitchType switchtype = (_eSwitchType)atoi(sd[14].c_str());
 
@@ -5501,7 +5622,7 @@ namespace http {
 				if (lighttype == 407) {
 					//Openwebnet Bus Custom
 					m_sql.safe_query(
-						"UPDATE DeviceStatus SET StrParam1='%s' WHERE (ID == '%q')", 
+						"UPDATE DeviceStatus SET StrParam1='%s' WHERE (ID == '%q')",
 						StrParam1.c_str(), ID.c_str());
 				}
 
@@ -5542,7 +5663,12 @@ namespace http {
 					return; //Only admin user allowed
 				}
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 				if (idx.empty())
 					return;
 				//First get Device Type/SubType
@@ -6014,7 +6140,12 @@ namespace http {
 					return; //Only admin user allowed
 				}
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 				if (idx.empty())
 					return;
 
@@ -6078,7 +6209,12 @@ namespace http {
 				}
 
 				std::string idx = request::findValue(&req, "idx");
-				std::string devidx = request::findValue(&req, "devidx");
+				std::string devidx;
+				if (!client.empty() && client != "web") {
+					devidx = ConverParams(req, false);
+				} else {
+					devidx = request::findValue(&req, "devidx");
+				}
 				if ((idx.empty()) || (devidx.empty()))
 					return;
 
@@ -6447,6 +6583,7 @@ namespace http {
 				}
 
 				std::string idx = request::findValue(&req, "idx");
+
 				if (idx.empty())
 					return;
 
@@ -6474,7 +6611,13 @@ namespace http {
 					return; //Only admin user allowed
 				}
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
+
 				if (idx.empty())
 					return;
 				//First get Device Type/SubType
@@ -6588,7 +6731,12 @@ namespace http {
 					session.reply_status = reply::forbidden;
 					return; //Only admin user allowed
 				}
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 				std::string sisfavorite = request::findValue(&req, "isfavorite");
 				if ((idx.empty()) || (sisfavorite.empty()))
 					return;
@@ -6617,7 +6765,12 @@ namespace http {
 					return; //Only admin user allowed
 				}
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 				std::string sisfavorite = request::findValue(&req, "isfavorite");
 				if ((idx.empty()) || (sisfavorite.empty()))
 					return;
@@ -6629,7 +6782,12 @@ namespace http {
 			} //makescenefavorite
 			else if (cparam == "resetsecuritystatus")
 			{
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 				std::string switchcmd = request::findValue(&req, "switchcmd");
 
 				if ((idx.empty()) || (switchcmd.empty()))
@@ -6690,7 +6848,12 @@ namespace http {
 				if (urights < 1)
 					return;
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 				std::string switchcmd = request::findValue(&req, "status");
 				std::string until = request::findValue(&req, "until");//optional until date / time as applicable
 				std::string action = request::findValue(&req, "action");//Run action or not (update status only)
@@ -6735,7 +6898,12 @@ namespace http {
 				if (!session.username.empty())
 					Username = session.username;
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				std::string switchcmd = request::findValue(&req, "switchcmd");
 				std::string level = "-1";
@@ -6953,7 +7121,12 @@ namespace http {
 				if (!session.username.empty())
 					Username = session.username;
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7084,7 +7257,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set Kelvin Level";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7117,7 +7295,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set brightness up!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7142,7 +7325,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set brightness down!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7167,7 +7355,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set to last known disco mode!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7192,7 +7385,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set to disco mode!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7219,7 +7417,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set to next disco mode!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7244,7 +7447,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set to previous disco mode!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7269,7 +7477,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set disco speed up!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7294,7 +7507,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set speed long!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7319,7 +7537,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set disco speed down!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				};
 
 				if (idx.empty())
 				{
@@ -7344,7 +7567,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set disco speed minimal!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7369,7 +7597,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set disco speed maximal!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7394,7 +7627,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set Kelvin up!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7419,7 +7657,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set Kelvin down!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7444,7 +7687,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set Full!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7469,7 +7717,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set to nightlight!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -7494,7 +7747,12 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "Set to clear white!";
 
-				std::string idx = request::findValue(&req, "idx");
+				std::string idx;
+				if (!client.empty() && client != "web") {
+					idx = ConverParams(req, false);
+				} else {
+					idx = request::findValue(&req, "idx");
+				}
 
 				if (idx.empty())
 				{
@@ -8344,7 +8602,8 @@ namespace http {
 			const bool bFetchFavorites,
 			const time_t LastUpdate,
 			const std::string &username,
-			const std::string &hardwareid)
+			const std::string &hardwareid,
+			const std::string &client)
 		{
 			std::vector<std::vector<std::string> > result;
 
@@ -8459,6 +8718,7 @@ namespace http {
 			std::set<std::string> _HiddenDevices;
 			bool bAllowDeviceToBeHidden = false;
 
+			int nScenesCount = 0;
 			int ii = 0;
 			if (rfilter == "all")
 			{
@@ -8591,6 +8851,8 @@ namespace http {
 					}
 				}
 			}
+			// save scenes count
+			nScenesCount = ii;
 
 			char szData[320];
 			if (totUserDevices == 0)
@@ -8606,7 +8868,7 @@ namespace http {
 						" A.AddjValue, A.AddjMulti, A.AddjValue2, A.AddjMulti2,"
 						" A.LastLevel, A.CustomImage, A.StrParam1, A.StrParam2,"
 						" A.Protected, IFNULL(B.XOffset,0), IFNULL(B.YOffset,0), IFNULL(B.PlanID,0), A.Description,"
-						" A.Options, A.Color "
+						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
 						"FROM DeviceStatus A LEFT OUTER JOIN DeviceToPlansMap as B ON (B.DeviceRowID==a.ID) "
 						"WHERE (A.ID=='%q')",
 						rowid.c_str());
@@ -8621,7 +8883,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, B.XOffset, B.YOffset,"
 						" B.PlanID, A.Description,"
-						" A.Options, A.Color "
+						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
 						"FROM DeviceStatus as A, DeviceToPlansMap as B "
 						"WHERE (B.PlanID=='%q') AND (B.DeviceRowID==a.ID)"
 						" AND (B.DevSceneType==0) ORDER BY B.[Order]",
@@ -8636,7 +8898,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, B.XOffset, B.YOffset,"
 						" B.PlanID, A.Description,"
-						" A.Options, A.Color "
+						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
 						"FROM DeviceStatus as A, DeviceToPlansMap as B,"
 						" Plans as C "
 						"WHERE (C.FloorplanID=='%q') AND (C.ID==B.PlanID)"
@@ -8680,7 +8942,7 @@ namespace http {
 							" A.AddjValue, A.AddjMulti, A.AddjValue2, A.AddjMulti2,"
 							" A.LastLevel, A.CustomImage, A.StrParam1, A.StrParam2,"
 							" A.Protected, IFNULL(B.XOffset,0), IFNULL(B.YOffset,0), IFNULL(B.PlanID,0), A.Description,"
-							" A.Options, A.Color "
+							" A.Options, A.Color, A.Model, A.Mac, A.Unit "
 							"FROM DeviceStatus as A LEFT OUTER JOIN DeviceToPlansMap as B "
 							"ON (B.DeviceRowID==a.ID) AND (B.DevSceneType==0) "
 							"WHERE (A.HardwareID == %q) "
@@ -8696,7 +8958,7 @@ namespace http {
 							" A.AddjValue, A.AddjMulti, A.AddjValue2, A.AddjMulti2,"
 							" A.LastLevel, A.CustomImage, A.StrParam1, A.StrParam2,"
 							" A.Protected, IFNULL(B.XOffset,0), IFNULL(B.YOffset,0), IFNULL(B.PlanID,0), A.Description,"
-							" A.Options, A.Color "
+							" A.Options, A.Color, A.Model, A.Mac, A.Unit "
 							"FROM DeviceStatus as A LEFT OUTER JOIN DeviceToPlansMap as B "
 							"ON (B.DeviceRowID==a.ID) AND (B.DevSceneType==0) "
 							"ORDER BY ");
@@ -8723,7 +8985,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, 0 as XOffset,"
 						" 0 as YOffset, 0 as PlanID, A.Description,"
-						" A.Options, A.Color "
+						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
 						"FROM DeviceStatus as A, SharedDevices as B "
 						"WHERE (B.DeviceRowID==a.ID)"
 						" AND (B.SharedUserID==%lu) AND (A.ID=='%q')",
@@ -8739,7 +9001,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, C.XOffset,"
 						" C.YOffset, C.PlanID, A.Description,"
-						" A.Options, A.Color "
+						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
 						"FROM DeviceStatus as A, SharedDevices as B,"
 						" DeviceToPlansMap as C "
 						"WHERE (C.PlanID=='%q') AND (C.DeviceRowID==a.ID)"
@@ -8756,7 +9018,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, C.XOffset, C.YOffset,"
 						" C.PlanID, A.Description,"
-						" A.Options, A.Color "
+						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
 						"FROM DeviceStatus as A, SharedDevices as B,"
 						" DeviceToPlansMap as C, Plans as D "
 						"WHERE (D.FloorplanID=='%q') AND (D.ID==C.PlanID)"
@@ -8803,7 +9065,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, IFNULL(C.XOffset,0),"
 						" IFNULL(C.YOffset,0), IFNULL(C.PlanID,0), A.Description,"
-						" A.Options, A.Color "
+						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
 						"FROM DeviceStatus as A, SharedDevices as B "
 						"LEFT OUTER JOIN DeviceToPlansMap as C  ON (C.DeviceRowID==A.ID)"
 						"WHERE (B.DeviceRowID==A.ID)"
@@ -8882,6 +9144,9 @@ namespace http {
 					std::string Description = sd[27];
 					std::string sOptions = sd[28];
 					std::string sColor = sd[29];
+					std::string sModel = sd[30];
+					std::string sMac = sd[31];
+					std::string sOutlet = sd[32];
 					std::map<std::string, std::string> options = m_sql.BuildDeviceOptions(sOptions);
 
 					struct tm ntime;
@@ -9076,6 +9341,9 @@ namespace http {
 					}
 					root["result"][ii]["idx"] = sd[0];
 					root["result"][ii]["Protected"] = (iProtected != 0);
+					root["result"][ii]["Model"] = sModel;
+					root["result"][ii]["Mac"] = sMac;
+					root["result"][ii]["Outlet"] = atoi(sOutlet.c_str());
 
 					CDomoticzHardwareBase *pHardware = m_mainworker.GetHardware(hardwareID);
 					if (pHardware != NULL)
@@ -11218,6 +11486,39 @@ namespace http {
 					ii++;
 				}
 			}
+
+			if (!client.empty() && client != "web") {
+				Json::Value	scenesJsonArray;
+				Json::Value	allDevicesJsonMap;
+				Json::Value retJsonArray = root["result"];
+				int jj = 0;
+
+				// remove old data
+				root.removeMember("result");
+
+				// conver scenes data
+				for (jj = 0; jj < nScenesCount; jj++) {
+					scenesJsonArray.append(retJsonArray[jj]);
+				}
+				root["result"]["scenes"] = scenesJsonArray;
+
+				// conver devices data
+				for (jj = nScenesCount; jj < retJsonArray.size(); jj++) {
+					std::string sMac = retJsonArray[jj]["Mac"].asString();
+					if (sMac.empty()) {
+						continue;
+					}
+
+					if (allDevicesJsonMap.isMember(sMac)) {
+						allDevicesJsonMap[sMac].append(retJsonArray[jj]);
+					} else {
+						Json::Value devicesJsonArray;
+						devicesJsonArray.append(retJsonArray[jj]);
+						allDevicesJsonMap[sMac] = devicesJsonArray;
+					}
+				}
+				root["result"]["devices"] = allDevicesJsonMap;
+			}
 		}
 
 		void CWebServer::UploadFloorplanImage(WebEmSession & session, const request& req, std::string & redirect_uri)
@@ -11316,7 +11617,17 @@ namespace http {
 				return; //Only admin user allowed
 			}
 
-			std::string idx = request::findValue(&req, "idx");
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
+			std::string idx;
+			if (!client.empty() && client != "web") {
+				idx = ConverParams(req, false);
+			} else {
+				idx = request::findValue(&req, "idx");
+			}
 			if (idx.empty())
 				return;
 
@@ -11808,14 +12119,30 @@ namespace http {
 			std::string rfilter = request::findValue(&req, "filter");
 			std::string order = request::findValue(&req, "order");
 			std::string rused = request::findValue(&req, "used");
-			std::string rid = request::findValue(&req, "rid");
 			std::string planid = request::findValue(&req, "plan");
 			std::string floorid = request::findValue(&req, "floor");
 			std::string sDisplayHidden = request::findValue(&req, "displayhidden");
 			std::string sFetchFavorites = request::findValue(&req, "favorite");
 			std::string sDisplayDisabled = request::findValue(&req, "displaydisabled");
+			std::string client = request::findValue(&req, "client");
+			std::string mac = request::findValue(&req, "mac");
+			std::string outlet = request::findValue(&req, "outlet");
 			bool bDisplayHidden = (sDisplayHidden == "1");
 			bool bFetchFavorites = (sFetchFavorites == "1");
+
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
+			std::string rid;
+			if (!client.empty() && client != "web" && !mac.empty() && !outlet.empty()) {
+				rid = ConverParams(req, false);
+				if (rid.empty()) {
+					rid = "-1";
+				}
+			} else {
+				rid = request::findValue(&req, "rid");
+			}
 
 			int HideDisabledHardwareSensors = 0;
 			m_sql.GetPreferencesVar("HideDisabledHardwareSensors", HideDisabledHardwareSensors);
@@ -11837,7 +12164,7 @@ namespace http {
 			root["status"] = "OK";
 			root["title"] = "Devices";
 			root["app_version"] = szAppVersion;
-			GetJSonDevices(root, rused, rfilter, order, rid, planid, floorid, bDisplayHidden, bDisabledDisabled, bFetchFavorites, LastUpdate, session.username, hwidx);
+			GetJSonDevices(root, rused, rfilter, order, rid, planid, floorid, bDisplayHidden, bDisabledDisabled, bFetchFavorites, LastUpdate, session.username, hwidx, client);
 		}
 
 		void CWebServer::RType_Users(WebEmSession & session, const request& req, Json::Value &root)
@@ -12750,7 +13077,18 @@ namespace http {
 				return; //Only admin user allowed
 			}
 
-			std::string idx = request::findValue(&req, "idx");
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
+			std::string idx;
+			if (!client.empty() && client != "web") {
+				idx = ConverParams(req, false);
+			} else {
+				idx = request::findValue(&req, "idx");
+			}
+
 			std::string deviceid = request::findValue(&req, "deviceid");
 			std::string name = HTMLSanitizer::Sanitize(request::findValue(&req, "name"));
 			std::string description = HTMLSanitizer::Sanitize(request::findValue(&req, "description"));
@@ -13443,15 +13781,29 @@ namespace http {
 
 		void CWebServer::RType_LightLog(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			uint64_t idx = 0;
-			if (request::findValue(&req, "idx") != "")
-			{
-				idx = std::strtoull(request::findValue(&req, "idx").c_str(), nullptr, 10);
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
 			}
+
+			std::string sidx;
+			if (!client.empty() && client != "web") {
+				sidx = ConverParams(req, false);
+			} else {
+				sidx = request::findValue(&req, "idx");
+			}
+
+			uint64_t idx = 0;
+			if (sidx != "")
+			{
+				idx = std::strtoull(sidx.c_str(), nullptr, 10);
+			}
+
 			std::vector<std::vector<std::string> > result;
 			//First get Device Type/SubType
 			result = m_sql.safe_query("SELECT Type, SubType, SwitchType, Options FROM DeviceStatus WHERE (ID == %" PRIu64 ")",
-				idx);
+					idx);
+
 			if (result.empty())
 				return;
 
@@ -13494,6 +13846,7 @@ namespace http {
 			root["title"] = "LightLog";
 
 			result = m_sql.safe_query("SELECT ROWID, nValue, sValue, User, Date FROM LightingLog WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date DESC", idx);
+
 			if (!result.empty())
 			{
 				std::map<std::string, std::string> selectorStatuses;
@@ -13604,25 +13957,38 @@ namespace http {
 
 		void CWebServer::RType_TextLog(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			uint64_t idx = 0;
-			if (request::findValue(&req, "idx") != "")
-			{
-				idx = std::strtoull(request::findValue(&req, "idx").c_str(), nullptr, 10);
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
 			}
+
+			std::string sidx;
+			if (!client.empty() && client != "web") {
+				sidx = ConverParams(req, false);
+			} else {
+				sidx = request::findValue(&req, "idx");
+			}
+
+			uint64_t idx = 0;
+			if (sidx != "")
+			{
+				idx = std::strtoull(sidx.c_str(), nullptr, 10);
+			}
+
 			std::vector<std::vector<std::string> > result;
 
 			root["status"] = "OK";
 			root["title"] = "TextLog";
 
 			result = m_sql.safe_query("SELECT ROWID, sValue, User, Date FROM LightingLog WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date DESC",
-				idx);
+					idx);
+
 			if (!result.empty())
 			{
 				int ii = 0;
 				for (const auto & itt : result)
 				{
 					std::vector<std::string> sd = itt;
-
 					root["result"][ii]["idx"] = sd[0];
 					root["result"][ii]["Data"] = sd[1];
 					root["result"][ii]["User"] = sd[2];
@@ -13634,11 +14000,24 @@ namespace http {
 
 		void CWebServer::RType_SceneLog(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			uint64_t idx = 0;
-			if (request::findValue(&req, "idx") != "")
-			{
-				idx = std::strtoull(request::findValue(&req, "idx").c_str(), nullptr, 10);
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
 			}
+
+			std::string sidx;
+			if (!client.empty() && client != "web") {
+				sidx = ConverParams(req, false);
+			} else {
+				sidx = request::findValue(&req, "idx");
+			}
+
+			uint64_t idx = 0;
+			if (sidx != "")
+			{
+				idx = std::strtoull(sidx.c_str(), nullptr, 10);
+			}
+
 			std::vector<std::vector<std::string> > result;
 
 			root["status"] = "OK";
@@ -13664,10 +14043,22 @@ namespace http {
 
 		void CWebServer::RType_HandleGraph(WebEmSession & session, const request& req, Json::Value &root)
 		{
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
+			std::string sidx;
+			if (!client.empty() && client != "web") {
+				sidx = ConverParams(req, false);
+			} else {
+				sidx = request::findValue(&req, "idx");
+			}
+
 			uint64_t idx = 0;
-			if (request::findValue(&req, "idx") != "")
+			if (sidx != "")
 			{
-				idx = std::strtoull(request::findValue(&req, "idx").c_str(), nullptr, 10);
+				idx = std::strtoull(sidx.c_str(), nullptr, 10);
 			}
 
 			std::vector<std::vector<std::string> > result;
@@ -13685,7 +14076,8 @@ namespace http {
 			localtime_r(&now, &tm1);
 
 			result = m_sql.safe_query("SELECT Type, SubType, SwitchType, AddjValue, AddjMulti, AddjValue2, Options FROM DeviceStatus WHERE (ID == %" PRIu64 ")",
-				idx);
+					idx);
+
 			if (result.empty())
 				return;
 
@@ -14594,8 +14986,8 @@ namespace http {
 											root["result"][ii]["d"] = szTime;
 
 											//float TotalValue = float(actValue - ulFirstValue);
-											
-											//prevents graph from going crazy if the meter counter resets 
+
+											//prevents graph from going crazy if the meter counter resets
 											float TotalValue = (actValue >= ulFirstValue) ? float(actValue - ulFirstValue) : actValue;
 
 											//if (TotalValue != 0)
@@ -17654,5 +18046,43 @@ namespace http {
 			m_sql.safe_query("DELETE FROM UserSessions WHERE (Username=='%q') and (SessionID!='%q')", username.c_str(), exceptSession.id.c_str());
 		}
 
+		std::string CWebServer::ConverParams(const request &req, bool isSubDev) {
+			std::string mac;
+			std::string outlet;
+			if (!isSubDev) {
+				mac = request::findValue(&req, "mac");
+				outlet = request::findValue(&req, "outlet");
+			} else {
+				mac = request::findValue(&req, "submac");
+				outlet = request::findValue(&req, "suboutlet");
+			}
+
+			if (mac.empty() || outlet.empty()) {
+				return "";
+			}
+
+			std::vector<std::vector<std::string>> result;
+			result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (Mac == '%q') AND (Unit == '%q')", mac.c_str(), outlet.c_str());
+			if (result.empty()) {
+				return "";
+			}
+
+			return result[0][0];
+		}
+
+		std::vector<std::string> CWebServer::GetDevicesIdByMac(std::string mac) {
+			std::vector<std::string> devids;
+			std::vector<std::vector<std::string> > result;
+			result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (Mac=='%q')", mac.c_str());
+			if (!result.empty()) {
+				for (const auto & itt : result)
+				{
+					std::vector<std::string> sd = itt;
+					devids.push_back(sd[0]);
+				}
+			}
+
+			return devids;
+		}
 	} //server
 }//http

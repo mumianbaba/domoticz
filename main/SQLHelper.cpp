@@ -48,7 +48,8 @@ const char *sqlCreateDeviceStatus =
 "[Unit] INTEGER DEFAULT 0, "
 "[Name] VARCHAR(100) DEFAULT Unknown, "
 "[Model] VARCHAR(100) DEFAULT Unknown, "
-"[Mac] VARCHAR(100) DEFAULT Unknown, "
+"[Mac] VARCHAR(48) DEFAULT Unknown, "
+"[Outlet] INTEGER DEFAULT 0, "
 "[Used] INTEGER DEFAULT 0, "
 "[Type] INTEGER NOT NULL, "
 "[SubType] INTEGER NOT NULL, "
@@ -3984,7 +3985,7 @@ uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, co
 		case sSwitchGeneralSwitch:		//Switch
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "100", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0", devname);
 		}
 		break;
 		case sSwitchTypeSelector:		//Selector Switch
@@ -6858,6 +6859,7 @@ void CSQLHelper::DeleteEvent(const std::string &idx)
 //Argument, one or multiple devices separated by a semicolumn (;)
 void CSQLHelper::DeleteDevices(const std::string &idx)
 {
+	std::cout<<"DeleteDevices at sql idx:"<<idx<<std::endl;
 	m_mainworker.DeleteDevice(idx);
 	std::vector<std::string> _idx;
 	StringSplit(idx, ";", _idx);

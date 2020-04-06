@@ -16,7 +16,9 @@
 #define SP_SUBTYPE   	3  //int
 #define SP_SWTYPE   	4  //int
 #define SP_UINT   		5  //int
-#define SP_OPT   		6  //string
+#define SP_Outlet   	6  //int
+
+#define SP_OPT   		7  //string
 
 
 #define DY_SSID   		0
@@ -48,7 +50,7 @@ public:
 
 	void RegisterSupportDevice(const std::string & model, const std::string & name,
 											const int type, const int subtype, const int swtype, const int uint,
-											const std::string & devopt);
+											const int outlet, const std::string & devopt);
 	int GetUincastPort();
 	void SetUincastPort(int port);
 
@@ -58,7 +60,8 @@ public:
 	int          GetSsidBySid(const int devType, const int subType, const std::string& sid);
 	std::string  GetDeviceIdBySsid(const int devType, const int subType, unsigned int rowId);
 	unsigned int GetSsidByDeviceId(const int devType, const int subType, const std::string& deviceID);
-	void 		 SetDeviceInfo(const std::string & mac, const std::string & model);
+	bool 		 SetDeviceInfo(const std::string & mac, const std::string & model);
+	void 		 DelDeviceInfo(const int ssid);
 
 	std::string  GetDeviceMac(const int ssid);
 	std::string  GetDeviceModel(const int ssid);
@@ -75,7 +78,7 @@ public:
 
 
 public:
-	static std::vector<boost::tuple<std::string, std::string, int, int, int, int, std::string> >  m_SpDevice;
+	static std::vector<boost::tuple<std::string, std::string, int, int, int, int, int, std::string> >  m_SpDevice;
 private:
 	bool m_bDevInfoInited;
 
@@ -99,7 +102,8 @@ private:
 	void InsertUpdatePressure(const std::string &nodeid, const std::string &Name, const float Pressure, const int battery);
 	void InsertUpdateTempHumPressure(const std::string &nodeid, const std::string &Name, const std::string& Temperature, const std::string& Humidity, const std::string& Pressure, const int battery);
 
-	void InsertUpdateTempHum(const std::string &nodeid, const std::string &Name, const float Temperature, const int Humidity, const int battery);
+	void InsertUpdateTempHum(const std::string &nodeid, const std::string &Name, const std::string& Temperature, const std::string&	Humidity, const int battery);
+	void InsertUpdateKwh(const std::string & nodeid, const std::string & Name, const std::string& LoadPower, const std::string& Consumed, const int battery);
 
 	std::string GetGatewayKey();
 	unsigned int GetShortID(const std::string & nodeid);
@@ -148,7 +152,7 @@ private:
 
 		boost::asio::ip::udp::socket socket_;
 		boost::asio::ip::udp::endpoint remote_endpoint_;
-		enum { max_length = 1024 };
+		enum { max_length = 8192 };
 		char data_[max_length];
 		int m_HardwareID;
 		std::string m_gatewayip;
