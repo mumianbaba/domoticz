@@ -428,7 +428,7 @@ namespace http {
 			RegisterCommandCode("kodimediacommand", boost::bind(&CWebServer::Cmd_KodiMediaCommand, this, _1, _2, _3));
 
 			RegisterCommandCode("AddZigbeeDevice", boost::bind(&CWebServer::Cmd_AddZigbeeDevice, this, _1, _2, _3));
-
+			RegisterCommandCode("GetNewDevicesList", boost::bind(&CWebServer::Cmd_GetNewDevicesList, this, _1, _2, _3));
 
 			RegisterCommandCode("panasonicsetmode", boost::bind(&CWebServer::Cmd_PanasonicSetMode, this, _1, _2, _3));
 			RegisterCommandCode("panasonicgetnodes", boost::bind(&CWebServer::Cmd_PanasonicGetNodes, this, _1, _2, _3));

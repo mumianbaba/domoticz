@@ -1130,12 +1130,15 @@ bool XiaomiGateway::SendMessageToGateway(const std::string &controlmessage) {
 	boost::asio::ip::udp::endpoint remote_endpoint_;
 	remote_endpoint_ = boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(m_GatewayIp), m_GatewayUPort);
 	socket_.send_to(boost::asio::buffer(*message1), remote_endpoint_);
+	sleep_milliseconds(50);
+#if 0
 	sleep_milliseconds(150);
 	boost::array<char, 512> recv_buffer_;
 	memset(&recv_buffer_[0], 0, sizeof(recv_buffer_));
 #ifdef _DEBUG
 	_log.Log(LOG_STATUS, "XiaomiGateway: request to %s - %s", m_GatewayIp.c_str(), message.c_str());
 #endif
+
 	while (socket_.available() > 0) {
 		socket_.receive_from(boost::asio::buffer(recv_buffer_), remote_endpoint_);
 		std::string receivedString(recv_buffer_.data());
@@ -1162,6 +1165,7 @@ bool XiaomiGateway::SendMessageToGateway(const std::string &controlmessage) {
 		_log.Log(LOG_STATUS, "XiaomiGateway: response %s", receivedString.c_str());
 #endif
 	}
+#endif
 	socket_.close();
 	return result;
 }
@@ -2718,9 +2722,8 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 				continue;
 			}
 
-
 			Json::Value read_cmd;
-			read_cmd["cmd"] = "raad";
+			read_cmd["cmd"] = "read";
 			read_cmd["sid"] = sid;
 			message = JSonToRawString (read_cmd);
 			std::shared_ptr<std::string> send_buff(new std::string(message));
@@ -2860,17 +2863,90 @@ namespace http {
 			std::string model = request::findValue(&req, "model");
 
 			if (hwid == "" || (cmd != "On" && cmd != "Off"))
+			{
 				return;
+			}
+
 			int iHardwareID = atoi(hwid.c_str());
 			CDomoticzHardwareBase *pHardware = m_mainworker.GetHardware(iHardwareID);
 			if (pHardware == NULL)
+			{
 				return;
+			}
+
 			if (pHardware->HwdType != HTYPE_XiaomiGateway)
+			{
 				return;
+			}
 
 			root["status"] = "OK";
 			root["title"] = "AddZigbeeDevice";
 			m_mainworker.AddZigbeeDevice(hwid, cmd, model);
+		}
+
+		void CWebServer::Cmd_GetNewDevicesList(WebEmSession & session, const request& req, Json::Value &root)
+		{
+			static int sHwId = 0;
+			static int sRandom = 0;
+			static std::map< std::string, std::vector<std::string> > sOldList;
+
+			if (session.rights != 2)
+			{
+				session.reply_status = reply::forbidden;
+				return; //Only admin user allowed
+			}
+
+			std::string hwid = request::findValue(&req, "idx");
+			std::string random = request::findValue(&req, "random");
+			if (hwid == "" || random == "")
+			{
+				return;
+			}
+
+			int tmp = std::stoi(random);
+			int iHardwareID = std::stoi(hwid.c_str());
+
+			std::cout<<"business random:"<<sRandom<< "  now:"<<tmp<<std::endl;
+			root["status"] = "OK";
+			root["title"] = "GetNewDevicesList";
+
+			std::vector<std::vector<std::string> > result;
+			result = m_sql.safe_query("SELECT Mac, Name, Model FROM DeviceStatus WHERE (HardwareID=%d)", iHardwareID);
+
+			/* start of get new list */
+			if(tmp != sRandom)
+			{
+				sRandom	= tmp;
+				sOldList.clear();
+				for (const auto &itt : result)
+				{
+					sOldList.insert(std::make_pair(itt[0], itt));
+				}
+				/* if dev_list null, add null at [0] */
+				root["dev_list"][0];
+				return;
+			}
+
+			int ii = 0;
+
+			for (const auto &itt : result)
+			{
+				auto iter = sOldList.find(itt[0]);
+				/* no find at old list */
+				if (iter == sOldList.end())
+				{
+					root["dev_list"][ii]["Name"] = itt[1];
+					root["dev_list"][ii]["Model"] = itt[2];
+					root["dev_list"][ii]["Mac"] = itt[0];
+					ii++;
+				}
+			}
+			/* if dev_list null, add null at [0] */
+			if (0 == ii)
+			{
+				root["dev_list"][0];
+			}
+
 		}
 
 		}
