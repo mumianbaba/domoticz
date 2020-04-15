@@ -3775,7 +3775,8 @@ std::vector<std::vector<std::string> > CSQLHelper::queryBlob(const std::string &
 	return results;
 }
 
-uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, const int SensorSubType, std::string &devname, const unsigned long nid, const std::string &soptions)
+
+uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, const int SensorSubType, std::string &devname, const unsigned long nid, const std::string &soptions, unsigned char unit)
 {
 	uint64_t DeviceRowIdx = (uint64_t)-1;
 	char ID[20];
@@ -3804,28 +3805,28 @@ uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, co
 
 	case pTypeTEMP:
 	case pTypeWEIGHT:
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0.0", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0.0", devname);
 		break;
 	case pTypeUV:
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0.0;0.0", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0.0;0.0", devname);
 		break;
 	case pTypeRAIN:
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0;0", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0;0", devname);
 		break;
 	case pTypeTEMP_BARO:
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0.0;1038.0;0;188.0", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0.0;1038.0;0;188.0", devname);
 		break;
 	case pTypeHUM:
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 50, "1", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 50, "1", devname);
 		break;
 	case pTypeTEMP_HUM:
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0.0;50;1", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0.0;50;1", devname);
 		break;
 	case pTypeTEMP_HUM_BARO:
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0.0;50;1;1010;1", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0.0;50;1;1010;1", devname);
 		break;
 	case pTypeRFXMeter:
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 10, 255, 0, "0", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 10, 255, 0, "0", devname);
 		break;
 	case pTypeUsage:
 	case pTypeLux:
@@ -3837,18 +3838,18 @@ uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, co
 		unsigned char ID4 = (unsigned char)((nid & 0x000000FF));
 		sprintf(ID, "%X%02X%02X%02X", ID1, ID2, ID3, ID4);
 
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0", devname);
 		break;
 	}
 	case pTypeP1Power:
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0;0;0;0;0;0", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0;0;0;0;0;0", devname);
 		break;
 	case pTypeAirQuality:
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, devname);
 		break;
 	case pTypeCURRENT:
 		//Current/Ampere
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0.0;0.0;0.0", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0.0;0.0;0.0", devname);
 		break;
 	case pTypeThermostat: //Thermostat Setpoint
 	{
@@ -3858,7 +3859,7 @@ uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, co
 		unsigned char ID4 = (unsigned char)((nid & 0x000000FF));
 		sprintf(ID, "%X%02X%02X%02X", ID1, ID2, ID3, ID4);
 
-		DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "20.5", devname);
+		DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "20.5", devname);
 		break;
 	}
 
@@ -3871,80 +3872,80 @@ uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, co
 		case sTypeWaterflow: //Waterflow
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0.0", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0.0", devname);
 		}
 		break;
 		case sTypeCounterIncremental:
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0", devname);
 			break;
 		case sTypeManagedCounter:
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "-1;0", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "-1;0", devname);
 			break;
 		case sTypeVoltage:		//Voltage
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0.000", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0.000", devname);
 		}
 		break;
 		case sTypeTextStatus:		//Text
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "Hello World", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "Hello World", devname);
 		}
 		break;
 		case sTypeAlert:		//Alert
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "No Alert!", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "No Alert!", devname);
 			break;
 		case sTypeSoundLevel:		//Sound Level
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "65", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "65", devname);
 		}
 		break;
 		case sTypeBaro:		//Barometer (hPa)
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "1021.34;0", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "1021.34;0", devname);
 		}
 		break;
 		case sTypeVisibility:		//Visibility (km)
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "10.3", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "10.3", devname);
 			break;
 		case sTypeDistance:		//Distance (cm)
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "123.4", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "123.4", devname);
 		}
 		break;
 		case sTypeSoilMoisture:		//Soil Moisture
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 3, devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 3, devname);
 		}
 		break;
 		case sTypeLeafWetness:		//Leaf Wetness
 		{
 			std::string rID = std::string(ID);
 			padLeft(rID, 8, '0');
-			DeviceRowIdx = UpdateValue(HardwareID, rID.c_str(), 1, SensorType, SensorSubType, 12, 255, 2, devname);
+			DeviceRowIdx = UpdateValue(HardwareID, rID.c_str(), unit, SensorType, SensorSubType, 12, 255, 2, devname);
 		}
 		break;
 		case sTypeKwh:		//kWh
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0;0.0", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0;0.0", devname);
 		}
 		break;
 		case sTypeCurrent:		//Current (Single)
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0.0", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0.0", devname);
 		}
 		break;
 		case sTypeSolarRadiation:		//Solar Radiation
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "1.0", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "1.0", devname);
 		}
 		break;
 		case sTypeCustom:			//Custom
@@ -3953,7 +3954,7 @@ uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, co
 			{
 				std::string rID = std::string(ID);
 				padLeft(rID, 8, '0');
-				DeviceRowIdx = UpdateValue(HardwareID, rID.c_str(), 1, SensorType, SensorSubType, 12, 255, 0, "0.0", devname);
+				DeviceRowIdx = UpdateValue(HardwareID, rID.c_str(), unit, SensorType, SensorSubType, 12, 255, 0, "0.0", devname);
 				if (DeviceRowIdx != (uint64_t)-1)
 				{
 					//Set the Label
@@ -3972,7 +3973,7 @@ uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, co
 		{
 		case sTypeWIND1:			// sTypeWIND1
 		case sTypeWIND4:			//Wind + Temp + Chill
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0;N;0;0;0;0", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0;N;0;0;0;0", devname);
 			break;
 		}
 		break;
@@ -3985,7 +3986,7 @@ uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, co
 		case sSwitchGeneralSwitch:		//Switch
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0", devname);
 		}
 		break;
 		case sSwitchTypeSelector:		//Selector Switch
@@ -3995,7 +3996,7 @@ uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, co
 			unsigned char ID3 = (unsigned char)((nid & 0x0000FF00) >> 8);
 			unsigned char ID4 = (unsigned char)((nid & 0x000000FF));
 			sprintf(ID, "%02X%02X%02X%02X", ID1, ID2, ID3, ID4);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 0, "0", devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 0, "0", devname);
 			if (DeviceRowIdx != (uint64_t)-1)
 			{
 				//Set switch type to selector
@@ -4022,7 +4023,7 @@ uint64_t CSQLHelper::CreateDevice(const int HardwareID, const int SensorType, co
 		case sTypeColor_CW_WW:       //Adjustable color temperature white switch
 		{
 			sprintf(ID, "%08lX", nid);
-			DeviceRowIdx = UpdateValue(HardwareID, ID, 1, SensorType, SensorSubType, 12, 255, 1, devname);
+			DeviceRowIdx = UpdateValue(HardwareID, ID, unit, SensorType, SensorSubType, 12, 255, 1, devname);
 			if (DeviceRowIdx != (uint64_t)-1)
 			{
 				//Set switch type to dimmer

@@ -499,6 +499,7 @@ namespace http {
 			RegisterCommandCode("addplanactivedevice", boost::bind(&CWebServer::Cmd_AddPlanActiveDevice, this, _1, _2, _3));
 			RegisterCommandCode("getplandevices", boost::bind(&CWebServer::Cmd_GetPlanDevices, this, _1, _2, _3));
 			RegisterCommandCode("deleteplandevice", boost::bind(&CWebServer::Cmd_DeletePlanDevice, this, _1, _2, _3));
+			RegisterCommandCode("updateplandevice", boost::bind(&CWebServer::Cmd_UpdataPlanDevice, this, _1, _2, _3));
 			RegisterCommandCode("setplandevicecoords", boost::bind(&CWebServer::Cmd_SetPlanDeviceCoords, this, _1, _2, _3));
 			RegisterCommandCode("deleteallplandevices", boost::bind(&CWebServer::Cmd_DeleteAllPlanDevices, this, _1, _2, _3));
 			RegisterCommandCode("changeplanorder", boost::bind(&CWebServer::Cmd_ChangePlanOrder, this, _1, _2, _3));
@@ -2355,7 +2356,7 @@ namespace http {
 
 			std::string client = request::findValue(&req, "client");
 			if (!client.empty()) {
-				boost::to_lower(client);
+				stdlower(client);
 			}
 
 			std::string idx = request::findValue(&req, "idx");
@@ -2368,7 +2369,7 @@ namespace http {
 					return;
 				}
 				// query all device id by mac
-				devids = GetDevicesIdByMac(mac);
+				devids = GetDeviceIdsByMac(mac);
 			} else {
 				std::string activeidx = request::findValue(&req, "activeidx");
 				if (!activeidx.empty()) {
@@ -2392,11 +2393,11 @@ namespace http {
 				boost::join(devids, ",").c_str(), activetype, idx.c_str());
 			if (result.empty())
 			{
-				for(const auto idx: devids) {
+				for(const auto deviceidx: devids) {
 					m_sql.safe_query(
 						"INSERT INTO DeviceToPlansMap (DevSceneType,DeviceRowID, PlanID) VALUES (%d,'%q','%q')",
 						activetype,
-						idx.c_str(),
+						deviceidx.c_str(),
 						idx.c_str()
 						);
 				}
@@ -2408,7 +2409,7 @@ namespace http {
 		{
 			std::string client = request::findValue(&req, "client");
 			if (!client.empty()) {
-				boost::to_lower(client);
+				stdlower(client);
 			}
 
 			std::string idx = request::findValue(&req, "idx");
@@ -2456,18 +2457,14 @@ namespace http {
 					{
 						if (!client.empty() && client != "web") {
 							std::vector<std::vector<std::string> > result2;
-							result2 = m_sql.safe_query("SELECT Mac, Unit FROM DeviceStatus WHERE (ID=='%q')",
+							result2 = m_sql.safe_query("SELECT Mac, Outlet FROM DeviceStatus WHERE (ID=='%q')",
 								DevSceneRowID.c_str());
 							if (result2.empty()) {
 								continue;
 							}
 
 							std::string sMac = result2[0][0];
-							std::string sOutlet = result2[0][1];
-							if (sMac.empty() || sOutlet.empty()) {
-								continue;
-							}
-
+							int nOutlet = atoi(result2[0][1].c_str());
 							Json::Value device;
 							device["idx"] = ID;
 							device["devidx"] = DevSceneRowID;
@@ -2476,13 +2473,13 @@ namespace http {
 							device["order"] = sd[3];
 							device["Name"] = Name;
 							device["Mac"] = sMac;
-							device["Outlet"] = atoi(sOutlet.c_str());
+							device["Outlet"] = nOutlet;
 
 							if (root["result"].isMember(sMac)) {
-								root["result"][sMac].append(device);
+								root["result"][sMac][nOutlet] = device;
 							} else {
 								Json::Value devicesJsonArray;
-								devicesJsonArray.append(device);
+								devicesJsonArray[nOutlet] = device;
 								root["result"][sMac] = devicesJsonArray;
 							}
 						} else {
@@ -2509,7 +2506,7 @@ namespace http {
 
 			std::string client = request::findValue(&req, "client");
 			if (!client.empty()) {
-				boost::to_lower(client);
+				stdlower(client);
 			}
 
 			std::string idx;
@@ -2521,12 +2518,10 @@ namespace http {
 					return;
 				}
 				// query all device id by mac
-				devids = GetDevicesIdByMac(mac);
+				devids = GetDeviceIdsByMac(mac);
 				if (devids.empty())
 					return;
-				for(const auto idx: devids) {
-					m_sql.safe_query("DELETE FROM DeviceToPlansMap WHERE (DeviceRowID == '%q')", idx.c_str());
-				}
+				m_sql.safe_query("DELETE FROM DeviceToPlansMap WHERE DeviceRowID IN(%q)", boost::join(devids, ",").c_str());
 			} else {
 				idx = request::findValue(&req, "idx");
 				if (idx.empty())
@@ -2538,6 +2533,91 @@ namespace http {
 			root["status"] = "OK";
 			root["title"] = "DeletePlanDevice";
 
+		}
+
+		void CWebServer::Cmd_UpdataPlanDevice(WebEmSession & session, const request& req, Json::Value &root)
+		{
+			if (session.rights != 2)
+			{
+				session.reply_status = reply::forbidden;
+				return; //Only admin user allowed
+			}
+			//std::string srcid = request::findValue(&req, "splanidx");
+			std::string dstid = request::findValue(&req, "planidx");
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				stdlower(client);
+			}
+
+			if (dstid.empty()){
+				std::cout<<"srcid or dstid empty"<<std::endl;
+				return;
+			}
+
+			auto result = m_sql.safe_query("SELECT ID FROM Plans WHERE (ID == %q)", dstid.c_str());
+			if (result.size() == 0 && dstid != "0"){
+				std::cout<<"dts room plan idx not find 0"<<std::endl;
+				return;
+			}
+
+			std::string idx;
+			std::string mac;
+			std::vector<std::string> devids;
+			if (!client.empty() && client != "web") {
+				mac = request::findValue(&req, "mac");
+				if (mac.empty()) {
+					return;
+				}
+
+				std::vector<std::string> macvector;
+				boost::split(macvector, mac, boost::is_any_of(";"), boost::token_compress_on);
+				for (const auto & itt : macvector)
+				{
+					// query all device id by mac
+					devids = GetDeviceIdsByMac(itt);
+					if (devids.empty()){
+						std::cout<<"the mac not find at db"<<std::endl;
+						continue;
+					}
+
+					// remove record if destion plan id 0
+					if (dstid == "0"){
+						m_sql.safe_query("DELETE FROM DeviceToPlansMap WHERE DeviceRowID IN(%q)", boost::join(devids, ",").c_str());
+						continue;
+					}
+
+					//device not in any room plan, insert into DeviceToPlansMap
+					result = m_sql.safe_query("SELECT PlanID FROM DeviceToPlansMap WHERE DeviceRowID IN(%q)", boost::join(devids, ",").c_str());
+					if (result.empty()){
+						for(const auto deviceidx: devids) {
+							m_sql.safe_query(
+								"INSERT INTO DeviceToPlansMap (DevSceneType,DeviceRowID, PlanID) VALUES (%d,'%q','%q')",
+								0,
+								deviceidx.c_str(),
+								dstid.c_str()
+								);
+						}
+						continue;
+					}
+					// have record, update record
+					m_sql.safe_query("UPDATE DeviceToPlansMap SET PlanID=%q WHERE DeviceRowID IN(%q)", dstid.c_str(), boost::join(devids, ",").c_str());
+				}
+			}
+			else {
+				idx = request::findValue(&req, "idx");
+				if (idx.empty())
+					return;
+
+				if (dstid == "0"){
+					m_sql.safe_query("DELETE FROM DeviceToPlansMap WHERE (ID == '%q')", idx.c_str());
+				}
+				else{
+					m_sql.safe_query("UPDATE DeviceToPlansMap SET PlanID=%q FROM  WHERE (ID == '%q')", dstid.c_str(), idx.c_str());
+				}
+			}
+
+			root["status"] = "OK";
+			root["title"] = "UpdataPlanDevice";
 		}
 
 		void CWebServer::Cmd_SetPlanDeviceCoords(WebEmSession & session, const request& req, Json::Value &root)
@@ -3491,7 +3571,7 @@ namespace http {
 */
 			std::string client = request::findValue(&req, "client");
 			if (!client.empty()) {
-				boost::to_lower(client);
+				stdlower(client);
 			}
 
 			if (cparam == "deleteallsubdevices")
@@ -3788,7 +3868,7 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "GetSceneDevices";
 
-				result = m_sql.safe_query("SELECT a.ID, b.Name, a.DeviceRowID, b.Type, b.SubType, b.nValue, b.sValue, a.Cmd, a.Level, b.ID, a.[Order], a.Color, a.OnDelay, a.OffDelay, b.SwitchType, b.Mac, b.Unit FROM SceneDevices a, DeviceStatus b WHERE (a.SceneRowID=='%q') AND (b.ID == a.DeviceRowID) ORDER BY a.[Order]",
+				result = m_sql.safe_query("SELECT a.ID, b.Name, a.DeviceRowID, b.Type, b.SubType, b.nValue, b.sValue, a.Cmd, a.Level, b.ID, a.[Order], a.Color, a.OnDelay, a.OffDelay, b.SwitchType, b.Mac, b.Outlet FROM SceneDevices a, DeviceStatus b WHERE (a.SceneRowID=='%q') AND (b.ID == a.DeviceRowID) ORDER BY a.[Order]",
 					idx.c_str());
 				if (!result.empty())
 				{
@@ -3835,6 +3915,33 @@ namespace http {
 						root["result"][ii]["SubType"] = RFX_Type_SubType_Desc(devType, subType);
 						ii++;
 					}
+				}
+
+				if (!client.empty() && client != "web") {
+					Json::Value	allDevicesJsonMap;
+					Json::Value retJsonArray = root["result"];
+					int jj = 0;
+
+					// remove old data
+					root.removeMember("result");
+
+					// conver devices data
+					for (jj = 0; jj < retJsonArray.size(); jj++) {
+						std::string sMac = retJsonArray[jj]["Mac"].asString();
+						if (sMac.empty()) {
+							continue;
+						}
+
+						int outlet = retJsonArray[jj]["Outlet"].asInt();
+						if (allDevicesJsonMap.isMember(sMac)) {
+							allDevicesJsonMap[sMac][outlet] = retJsonArray[jj];
+						} else {
+							Json::Value devicesJsonArray;
+							devicesJsonArray[outlet] = retJsonArray[jj];
+							allDevicesJsonMap[sMac] = devicesJsonArray;
+						}
+					}
+					root["result"]["devices"] = allDevicesJsonMap;
 				}
 			}
 			else if (cparam == "changescenedeviceorder")
@@ -8868,7 +8975,7 @@ namespace http {
 						" A.AddjValue, A.AddjMulti, A.AddjValue2, A.AddjMulti2,"
 						" A.LastLevel, A.CustomImage, A.StrParam1, A.StrParam2,"
 						" A.Protected, IFNULL(B.XOffset,0), IFNULL(B.YOffset,0), IFNULL(B.PlanID,0), A.Description,"
-						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
+						" A.Options, A.Color, A.Model, A.Mac, A.Outlet "
 						"FROM DeviceStatus A LEFT OUTER JOIN DeviceToPlansMap as B ON (B.DeviceRowID==a.ID) "
 						"WHERE (A.ID=='%q')",
 						rowid.c_str());
@@ -8883,7 +8990,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, B.XOffset, B.YOffset,"
 						" B.PlanID, A.Description,"
-						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
+						" A.Options, A.Color, A.Model, A.Mac, A.Outlet "
 						"FROM DeviceStatus as A, DeviceToPlansMap as B "
 						"WHERE (B.PlanID=='%q') AND (B.DeviceRowID==a.ID)"
 						" AND (B.DevSceneType==0) ORDER BY B.[Order]",
@@ -8898,7 +9005,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, B.XOffset, B.YOffset,"
 						" B.PlanID, A.Description,"
-						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
+						" A.Options, A.Color, A.Model, A.Mac, A.Outlet "
 						"FROM DeviceStatus as A, DeviceToPlansMap as B,"
 						" Plans as C "
 						"WHERE (C.FloorplanID=='%q') AND (C.ID==B.PlanID)"
@@ -8942,7 +9049,7 @@ namespace http {
 							" A.AddjValue, A.AddjMulti, A.AddjValue2, A.AddjMulti2,"
 							" A.LastLevel, A.CustomImage, A.StrParam1, A.StrParam2,"
 							" A.Protected, IFNULL(B.XOffset,0), IFNULL(B.YOffset,0), IFNULL(B.PlanID,0), A.Description,"
-							" A.Options, A.Color, A.Model, A.Mac, A.Unit "
+							" A.Options, A.Color, A.Model, A.Mac, A.Outlet "
 							"FROM DeviceStatus as A LEFT OUTER JOIN DeviceToPlansMap as B "
 							"ON (B.DeviceRowID==a.ID) AND (B.DevSceneType==0) "
 							"WHERE (A.HardwareID == %q) "
@@ -8958,7 +9065,7 @@ namespace http {
 							" A.AddjValue, A.AddjMulti, A.AddjValue2, A.AddjMulti2,"
 							" A.LastLevel, A.CustomImage, A.StrParam1, A.StrParam2,"
 							" A.Protected, IFNULL(B.XOffset,0), IFNULL(B.YOffset,0), IFNULL(B.PlanID,0), A.Description,"
-							" A.Options, A.Color, A.Model, A.Mac, A.Unit "
+							" A.Options, A.Color, A.Model, A.Mac, A.Outlet "
 							"FROM DeviceStatus as A LEFT OUTER JOIN DeviceToPlansMap as B "
 							"ON (B.DeviceRowID==a.ID) AND (B.DevSceneType==0) "
 							"ORDER BY ");
@@ -8985,7 +9092,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, 0 as XOffset,"
 						" 0 as YOffset, 0 as PlanID, A.Description,"
-						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
+						" A.Options, A.Color, A.Model, A.Mac, A.Outlet "
 						"FROM DeviceStatus as A, SharedDevices as B "
 						"WHERE (B.DeviceRowID==a.ID)"
 						" AND (B.SharedUserID==%lu) AND (A.ID=='%q')",
@@ -9001,7 +9108,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, C.XOffset,"
 						" C.YOffset, C.PlanID, A.Description,"
-						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
+						" A.Options, A.Color, A.Model, A.Mac, A.Outlet "
 						"FROM DeviceStatus as A, SharedDevices as B,"
 						" DeviceToPlansMap as C "
 						"WHERE (C.PlanID=='%q') AND (C.DeviceRowID==a.ID)"
@@ -9018,7 +9125,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, C.XOffset, C.YOffset,"
 						" C.PlanID, A.Description,"
-						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
+						" A.Options, A.Color, A.Model, A.Mac, A.Outlet "
 						"FROM DeviceStatus as A, SharedDevices as B,"
 						" DeviceToPlansMap as C, Plans as D "
 						"WHERE (D.FloorplanID=='%q') AND (D.ID==C.PlanID)"
@@ -9065,7 +9172,7 @@ namespace http {
 						" A.LastLevel, A.CustomImage, A.StrParam1,"
 						" A.StrParam2, A.Protected, IFNULL(C.XOffset,0),"
 						" IFNULL(C.YOffset,0), IFNULL(C.PlanID,0), A.Description,"
-						" A.Options, A.Color, A.Model, A.Mac, A.Unit "
+						" A.Options, A.Color, A.Model, A.Mac, A.Outlet "
 						"FROM DeviceStatus as A, SharedDevices as B "
 						"LEFT OUTER JOIN DeviceToPlansMap as C  ON (C.DeviceRowID==A.ID)"
 						"WHERE (B.DeviceRowID==A.ID)"
@@ -11509,11 +11616,12 @@ namespace http {
 						continue;
 					}
 
+					int outlet = retJsonArray[jj]["Outlet"].asInt();
 					if (allDevicesJsonMap.isMember(sMac)) {
-						allDevicesJsonMap[sMac].append(retJsonArray[jj]);
+						allDevicesJsonMap[sMac][outlet] = retJsonArray[jj];
 					} else {
 						Json::Value devicesJsonArray;
-						devicesJsonArray.append(retJsonArray[jj]);
+						devicesJsonArray[outlet] = retJsonArray[jj];
 						allDevicesJsonMap[sMac] = devicesJsonArray;
 					}
 				}
@@ -11619,17 +11727,39 @@ namespace http {
 
 			std::string client = request::findValue(&req, "client");
 			if (!client.empty()) {
-				boost::to_lower(client);
+				stdlower(client);
 			}
 
 			std::string idx;
 			if (!client.empty() && client != "web") {
-				idx = ConverParams(req, false);
+				std::string mac = request::findValue(&req, "mac");
+				if (mac.empty()) {
+					return;
+				}
+				// mac1;mac2   ==>  mac1','mac2
+				stdreplace(mac, ";", "','");
+				// mac1','mac2 ==>  'mac1','mac2'  or  mac1  ==> 'mac1'
+				mac = "'" + mac + "'";
+				std::vector<std::vector<std::string>> result;
+				result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE Mac IN(%s)", mac.c_str());
+				if (!result.empty()) {
+					int count = 0;
+					for (const auto &itt: result) {
+						count++;
+						std::vector<std::string> sd = itt;
+						idx += sd[0];
+						if (count != result.size()) {
+							idx += ";";
+						}
+					}
+				}
 			} else {
 				idx = request::findValue(&req, "idx");
 			}
-			if (idx.empty())
+
+			if (idx.empty()) {
 				return;
+			}
 
 			root["status"] = "OK";
 			root["title"] = "DeleteDevice";
@@ -12131,7 +12261,7 @@ namespace http {
 			bool bFetchFavorites = (sFetchFavorites == "1");
 
 			if (!client.empty()) {
-				boost::to_lower(client);
+				stdlower(client);
 			}
 
 			std::string rid;
@@ -13079,14 +13209,7 @@ namespace http {
 
 			std::string client = request::findValue(&req, "client");
 			if (!client.empty()) {
-				boost::to_lower(client);
-			}
-
-			std::string idx;
-			if (!client.empty() && client != "web") {
-				idx = ConverParams(req, false);
-			} else {
-				idx = request::findValue(&req, "idx");
+				stdlower(client);
 			}
 
 			std::string deviceid = request::findValue(&req, "deviceid");
@@ -13118,6 +13241,32 @@ namespace http {
 			std::string sOptions = HTMLSanitizer::Sanitize(base64_decode(request::findValue(&req, "options")));
 			std::string devoptions = HTMLSanitizer::Sanitize(CURLEncode::URLDecode(request::findValue(&req, "devoptions")));
 			std::string EnergyMeterMode = CURLEncode::URLDecode(request::findValue(&req, "EnergyMeterMode"));
+
+			std::string mac = request::findValue(&req, "mac");
+			std::string idx;
+			std::vector<std::string> idxs;
+			if (!client.empty() && client != "web") {
+				// if mac and outlets are set, try to get idx
+				idx = ConverParams(req, false);
+				// get device ids by mac when renaming
+				if (idx.empty() && !mac.empty()) {
+					idxs = GetDeviceIdsByMac(mac);
+					if (idxs.empty()) {
+						return;
+					}
+					// set idx here, compatible with other field settings
+					if (idx.empty()) {
+						idx = idxs[0];
+					}
+				} else if (!idx.empty()) {
+					idxs.push_back(idx);
+				}
+			} else {
+				idx = request::findValue(&req, "idx");
+				if (!idx.empty()) {
+					idxs.push_back(idx);
+				}
+			}
 
 			char szTmp[200];
 
@@ -13178,15 +13327,15 @@ namespace http {
 			}
 			if (name.empty())
 			{
-				m_sql.safe_query("UPDATE DeviceStatus SET Used=%d WHERE (ID == '%q')",
-					used, idx.c_str());
+				m_sql.safe_query("UPDATE DeviceStatus SET Used=%d WHERE ID IN(%q)",
+					used, boost::join(idxs, ",").c_str());
 			}
 			else
 			{
 				if (switchtype == -1)
 				{
-					m_sql.safe_query("UPDATE DeviceStatus SET Used=%d, Name='%q', Description='%q' WHERE (ID == '%q')",
-						used, name.c_str(), description.c_str(), idx.c_str());
+					m_sql.safe_query("UPDATE DeviceStatus SET Used=%d, Name='%q', Description='%q' WHERE ID IN(%q)",
+						used, name.c_str(), description.c_str(), boost::join(idxs, ",").c_str());
 				}
 				else
 				{
@@ -13786,17 +13935,20 @@ namespace http {
 				boost::to_lower(client);
 			}
 
-			std::string sidx;
+			std::string sIdx;
+			std::string sSql = " ";
 			if (!client.empty() && client != "web") {
-				sidx = ConverParams(req, false);
+				// get page and count param
+				sSql = PagingToSql(req);
+				sIdx = ConverParams(req, false);
 			} else {
-				sidx = request::findValue(&req, "idx");
+				sIdx = request::findValue(&req, "idx");
 			}
 
 			uint64_t idx = 0;
-			if (sidx != "")
+			if (sIdx != "")
 			{
-				idx = std::strtoull(sidx.c_str(), nullptr, 10);
+				idx = std::strtoull(sIdx.c_str(), nullptr, 10);
 			}
 
 			std::vector<std::vector<std::string> > result;
@@ -13845,7 +13997,7 @@ namespace http {
 			root["status"] = "OK";
 			root["title"] = "LightLog";
 
-			result = m_sql.safe_query("SELECT ROWID, nValue, sValue, User, Date FROM LightingLog WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date DESC", idx);
+			result = m_sql.safe_query("SELECT ROWID, nValue, sValue, User, Date FROM LightingLog WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date DESC %q", idx, sSql.c_str());
 
 			if (!result.empty())
 			{
@@ -13959,20 +14111,23 @@ namespace http {
 		{
 			std::string client = request::findValue(&req, "client");
 			if (!client.empty()) {
-				boost::to_lower(client);
+				stdlower(client);
 			}
 
-			std::string sidx;
+			std::string sIdx;
+			std::string sSql = " ";
 			if (!client.empty() && client != "web") {
-				sidx = ConverParams(req, false);
+				// get page and count param
+				sSql = PagingToSql(req);
+				sIdx = ConverParams(req, false);
 			} else {
-				sidx = request::findValue(&req, "idx");
+				sIdx = request::findValue(&req, "idx");
 			}
 
 			uint64_t idx = 0;
-			if (sidx != "")
+			if (sIdx != "")
 			{
-				idx = std::strtoull(sidx.c_str(), nullptr, 10);
+				idx = std::strtoull(sIdx.c_str(), nullptr, 10);
 			}
 
 			std::vector<std::vector<std::string> > result;
@@ -13980,8 +14135,8 @@ namespace http {
 			root["status"] = "OK";
 			root["title"] = "TextLog";
 
-			result = m_sql.safe_query("SELECT ROWID, sValue, User, Date FROM LightingLog WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date DESC",
-					idx);
+			result = m_sql.safe_query("SELECT ROWID, sValue, User, Date FROM LightingLog WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date DESC %q",
+					idx, sSql.c_str());
 
 			if (!result.empty())
 			{
@@ -14000,22 +14155,10 @@ namespace http {
 
 		void CWebServer::RType_SceneLog(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			std::string client = request::findValue(&req, "client");
-			if (!client.empty()) {
-				boost::to_lower(client);
-			}
-
-			std::string sidx;
-			if (!client.empty() && client != "web") {
-				sidx = ConverParams(req, false);
-			} else {
-				sidx = request::findValue(&req, "idx");
-			}
-
 			uint64_t idx = 0;
-			if (sidx != "")
+			if (request::findValue(&req, "idx") != "")
 			{
-				idx = std::strtoull(sidx.c_str(), nullptr, 10);
+				idx = std::strtoull(request::findValue(&req, "idx").c_str(), nullptr, 10);
 			}
 
 			std::vector<std::vector<std::string> > result;
@@ -14045,20 +14188,20 @@ namespace http {
 		{
 			std::string client = request::findValue(&req, "client");
 			if (!client.empty()) {
-				boost::to_lower(client);
+				stdlower(client);
 			}
 
-			std::string sidx;
+			std::string sIdx;
 			if (!client.empty() && client != "web") {
-				sidx = ConverParams(req, false);
+				sIdx = ConverParams(req, false);
 			} else {
-				sidx = request::findValue(&req, "idx");
+				sIdx = request::findValue(&req, "idx");
 			}
 
 			uint64_t idx = 0;
-			if (sidx != "")
+			if (sIdx != "")
 			{
-				idx = std::strtoull(sidx.c_str(), nullptr, 10);
+				idx = std::strtoull(sIdx.c_str(), nullptr, 10);
 			}
 
 			std::vector<std::vector<std::string> > result;
@@ -18062,7 +18205,7 @@ namespace http {
 			}
 
 			std::vector<std::vector<std::string>> result;
-			result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (Mac == '%q') AND (Unit == '%q')", mac.c_str(), outlet.c_str());
+			result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (Mac == '%q') AND (Outlet == '%q')", mac.c_str(), outlet.c_str());
 			if (result.empty()) {
 				return "";
 			}
@@ -18070,10 +18213,20 @@ namespace http {
 			return result[0][0];
 		}
 
-		std::vector<std::string> CWebServer::GetDevicesIdByMac(std::string mac) {
+		std::vector<std::string> CWebServer::GetDeviceIdsByMac(std::string mac) {
 			std::vector<std::string> devids;
 			std::vector<std::vector<std::string> > result;
-			result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (Mac=='%q')", mac.c_str());
+
+			std::vector<std::string> macvector;
+			boost::split(macvector, mac, boost::is_any_of(";"), boost::token_compress_on);
+			std::string sql;
+			for (const auto & itt : macvector)
+			{
+				sql += "'"+itt+"',";
+			}
+			sql.pop_back();
+
+			result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE Mac IN(%s)", sql.c_str());
 			if (!result.empty()) {
 				for (const auto & itt : result)
 				{
@@ -18083,6 +18236,18 @@ namespace http {
 			}
 
 			return devids;
+		}
+
+		std::string CWebServer::PagingToSql(const request& req) {
+			std::string sPage = request::findValue(&req, "page");
+			std::string sCount = request::findValue(&req, "count");
+			std::string sSql = " ";
+			if (!sPage.empty() && atoi(sPage.c_str()) > 0 && !sCount.empty() && atoi(sCount.c_str()) > 0) {
+				int offset = (atoi(sPage.c_str()) - 1) * atoi(sCount.c_str());
+				sSql = "LIMIT " + sCount + " OFFSET " + std::to_string(offset);;
+			}
+
+			return sSql;
 		}
 	} //server
 }//http

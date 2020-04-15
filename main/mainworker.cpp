@@ -1149,7 +1149,7 @@ bool MainWorker::AddHardwareFromParams(
 #endif
 		break;
 	case HTYPE_XiaomiGateway:
-		pHardware = new XiaomiGateway(ID);
+		pHardware = new XiaoMi::XiaomiGateway(ID);
 		break;
 	case HTYPE_Arilux:
 		pHardware = new Arilux(ID);
@@ -13410,7 +13410,7 @@ void MainWorker::CheckSceneCode(const uint64_t DevRowIdx, const uint8_t dType, c
 					bool bHaveGroupCmd = false;
 					int maxDimLevel = 0;
 
-					GetLightStatus(dType, dSubType, STYPE_OnOff, rnValue, sValue, lstatus, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
+					GetLightStatus(dType, dSubType, static_cast<const _eSwitchType>(STYPE_OnOff), rnValue, sValue, lstatus, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
 					std::string switchcmd = (IsLightSwitchOn(lstatus) == true) ? "On" : "Off";
 
 					m_sql.AddTaskItem(_tTaskItem::SwitchSceneEvent(0.2f, ID, switchcmd, "SceneTrigger", User));

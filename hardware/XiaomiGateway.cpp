@@ -13,10 +13,18 @@
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <inttypes.h>
+#include <memory>
 
 #ifndef WIN32
 #include <ifaddrs.h>
 #endif
+
+
+#include "Xiaomi/Outlet.hpp"
+#include "Xiaomi/DevAttr.hpp"
+#include "Xiaomi/Device.hpp"
+#include "Xiaomi/SupportDevice.hpp"
+
 
 /*
 Xiaomi (Aqara) makes a smart home gateway/hub that has support
@@ -27,7 +35,7 @@ Protocol is Zigbee and WiFi, and the gateway and
 Domoticz need to be in the same network/subnet with multicast working
 */
 
-namespace xiaomi{
+namespace XiaoMi{
 
 const char* key_cmd = "cmd";
 const char* key_model = "model";
@@ -58,6 +66,12 @@ const char* rep_hbeat = "heartbeat";
 
 }
 
+
+using namespace XiaoMi;
+
+
+ AttrMap XiaomiGateway::m_attrMap;
+ DeviceMap XiaomiGateway::m_deviceMap;
 
  std::vector<boost::tuple<std::string, std::string, int, int, int, int, int, std::string> >  XiaomiGateway::m_SpDevice;
 
@@ -727,6 +741,81 @@ void XiaomiGateway::RegisterSupportDevice(const std::string & model, const std::
 
 
 
+void XiaomiGateway::initDeviceAttrMap(const DevInfo devInfo[], int size)
+{
+	int ii;
+	for (ii = 0; ii < size; ii++)
+	{
+		m_attrMap.emplace(devInfo[ii].zigbeeModel, new DevAttr(devInfo[ii]));
+	}
+	std::cout<<"support device number:"<<m_attrMap.size()<<std::endl;
+	for (const auto & itt : m_attrMap)
+	{
+		std::cout<<"zigbee model:"<<itt.first<<std::endl;
+	}
+	return;
+}
+
+											
+const DevAttr* XiaomiGateway::findDevAttr(std::string& model)
+{
+	auto it = m_attrMap.find(model);
+	if (it == m_attrMap.end())
+	{
+		std::cout<<"error: not support zigbee model:"<<model<<std::endl;
+		return nullptr;
+	}
+	return it->second;
+}
+
+
+void XiaomiGateway::addDeviceToMap(std::string& mac, std::shared_ptr<Device> ptr)
+{
+	m_deviceMap.emplace(mac, ptr);
+	std::cout<<"add device to map mac:"<<mac<<std::endl;
+}
+
+void XiaomiGateway::delDeviceFromMap(std::string& mac)
+{
+	m_deviceMap.erase(mac);
+	std::cout<<"delDeviceFromMap mac:"<<mac<<std::endl;
+}
+
+
+std::shared_ptr<Device> XiaomiGateway::getDevice(std::string& mac)
+{
+	std::shared_ptr<Device> ptr;
+	auto it = m_deviceMap.find(mac);
+	if (it == m_deviceMap.end())
+	{
+		std::cout<<"error: getDevice failed mac:"<<mac<<std::endl;
+		return ptr;
+	}
+	return it->second;
+}
+
+std::shared_ptr<Device> XiaomiGateway::getDevice(unsigned int ssid, int type, int subType, int unit)
+{
+	bool res;
+	std::shared_ptr<Device> ptr;
+	for (const auto itt : m_deviceMap)
+	{
+		res = itt.second->match(ssid, type, subType, unit);
+		if (true == res)
+		{
+			ptr = itt.second;
+			break;
+		}
+	}
+	if (ptr.get() == nullptr)
+	{
+		std::cout<<"error: getDevice failed ssid:"<<std::hex<<ssid <<"	type:"<<std::hex<<type;
+		std::cout<<" subType: "<<std::hex<<subType<<"  unit:"<<unit<<std::endl;
+	}
+	return ptr;
+}
+
+
 XiaomiGateway::XiaomiGateway(const int ID)
 {
 	m_HwdID = ID;
@@ -734,158 +823,51 @@ XiaomiGateway::XiaomiGateway(const int ID)
 	m_ListenPort9898 = false;
 	m_bDevInfoInited = false;
 	m_GatewayUPort = 9494;
-	m_SpDevice.clear();
 
-	RegisterSupportDevice("lumi.vibration.aq1", "Aqara Vibration Sensor", pTypeGeneralSwitch, sSwitchTypeSelector ,STYPE_Selector, 1, 0, "SelectorStyle:0;LevelNames:Off|vibration|tilt|drop");
-	RegisterSupportDevice("lumi.remote.b186acn01", "Aqara Wireless Single Switch", pTypeGeneralSwitch, sSwitchTypeSelector ,STYPE_Selector, 1, 0, "SelectorStyle:0;LevelNames:Off|Click|Double Click|Long Click");
-	RegisterSupportDevice("lumi.remote.b286acn01", "Aqara Wireless Dual Switch", pTypeGeneralSwitch, sSwitchTypeSelector ,STYPE_Selector, 1, 0, "SelectorStyle:0;LevelNames:Off|S1|S1 Double Click|S1 Long Click|S2|S2 Double Click|S2 Long Click|Both Click|Both Double Click|Both Long Click");
-	RegisterSupportDevice("lumi.sensor_magnet.aq2", "Aqara Door Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_Contact, 1, 0, "");
-	RegisterSupportDevice("lumi.sensor_motion.aq2", "Aqara Motion Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_Motion, 1, 0, "");
-	//RegisterSupportDevice("lumi.sensor_motion.aq2", "Aqara Motion Sensor", pTypeLux, sTypeLux, STYPE_OnOff, 1, "");
-	RegisterSupportDevice("lumi.sensor_wleak.aq1", "Aqara Water Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_SMOKEDETECTOR, 1, 0,"");
-	RegisterSupportDevice("lumi.sensor_switch.aq3", "Aqara Mini Switch Plus", pTypeGeneralSwitch, sSwitchTypeSelector ,STYPE_Selector, 1, 0,"SelectorStyle:0;LevelNames:Off|Click|Double Click|Long Click|Shake");
-	RegisterSupportDevice("lumi.weather", "Aqara Temp Sensor", pTypeTEMP_HUM_BARO, sTypeTHB1, STYPE_OnOff, 1, 0, "");
-	RegisterSupportDevice("lumi.sensor_cube.aqgl01", "Aqara Cube", pTypeGeneralSwitch, sSwitchTypeSelector ,STYPE_Selector, 1, 0, "SelectorStyle:0;LevelNames:Off|flip90|flip180|move|tap_twice|shake|swing|alert|free_fall|rotate");
-	RegisterSupportDevice("lumi.ctrl_neutral1", "Aqara Wall Single Switch", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_OnOff, 1, 0, "");
-	RegisterSupportDevice("lumi.ctrl_neutral2", "Aqara Wall Dual Switch", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_OnOff, 2, 1, "");
-	RegisterSupportDevice("lumi.ctrl_neutral2", "Aqara Wall Dual Switch", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_OnOff, 1, 0, "");
-	RegisterSupportDevice("lumi.plug.maeu01", "Aqara Smart Plug", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_OnOff, 1, 0, "");
-	RegisterSupportDevice("lumi.plug.maeu01", "Aqara Smart Plug", pTypeGeneral, sTypeKwh, STYPE_OnOff, 1, 1, "");
-	RegisterSupportDevice("lumi.light.aqcn02", "Aqara RGB LED Bulb", pTypeColorSwitch, sTypeColor_CW_WW, STYPE_Dimmer, 1, 0, "");
-	RegisterSupportDevice("lumi.remote.b1acn01", "Aqara Mini Switch", pTypeGeneralSwitch, sSwitchTypeSelector, STYPE_Selector, 1, 0, "SelectorStyle:0;LevelNames:Off|Click|Double Click|Long Click");
+	if (m_attrMap.empty())
+	{
+		initDeviceAttrMap(devInfoTab, sizeof(devInfoTab)/sizeof(devInfoTab[0]));
+	}
 
-	RegisterSupportDevice("RH3040", "Tuya Motion Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_Motion, 1, 0, "");
-	RegisterSupportDevice("RH3052", "Tuya Temp Sensor", pTypeTEMP_HUM, sTypeTH5, STYPE_OnOff, 1, 0, "");
-	RegisterSupportDevice("TS0041", "Tuya Wireless Single Switch", pTypeGeneralSwitch, sSwitchTypeSelector, STYPE_Selector, 1, 0, "SelectorStyle:0;LevelNames:Off|Click|Double Click|Long Click");
-
-	RegisterSupportDevice("FNB54-WTS08ML1.0", "CY Water Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_SMOKEDETECTOR, 1, 0, "");
-	RegisterSupportDevice("FNB54-DOS09ML0.7", "CY Door Sensor",  pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_Contact, 1, 0, "");
-	RegisterSupportDevice("FNB54-THM17ML1.1", "CY Temp Sensor", pTypeTEMP_HUM, sTypeTH5, STYPE_OnOff, 1, 0, "");
-	RegisterSupportDevice("FNB54-SMF0AML0.9", "CY Smoke Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_SMOKEDETECTOR, 1, 0, "");
-	RegisterSupportDevice("FNB54-GAS07ML0.8", "CY GAS Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_SMOKEDETECTOR, 1, 0, "");
-	RegisterSupportDevice("FNB54-BOT0AML0.9", "CY Motion Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_Motion, 1, 0, "");
 }
 
 XiaomiGateway::~XiaomiGateway(void)
 {
+		std::cout<<"~XiaomiGateway"<<std::endl;
 }
 
-int XiaomiGateway::WriteToGeneralSwitch(const tRBUF *pCmd,  Json::Value& json)
+int XiaomiGateway::WriteToGeneralSwitch(const tRBUF *pCmd, int length, Json::Value& json)
 {
 	unsigned char packettype = pCmd->ICMND.packettype;
 	unsigned char subtype = pCmd->ICMND.subtype;
 	if (packettype != pTypeGeneralSwitch){
 		return -1;
 	}
-
+	int ret = -1;
+	
 	_tGeneralSwitch *xcmd = (_tGeneralSwitch*)pCmd;
+	std::string key= "xxx";
 
-	std::string channel= "xxx";
-	std::string commmand= "xxx";
-	std::string mac = "0";
-
-
-	int ssid = xcmd->id;
-	mac = GetDeviceMac(ssid);
-	json["sid"]=mac.c_str();
-	json["model"] = GetDeviceModel(ssid);
-
-	switch (subtype)
+	unsigned int ssid = xcmd->id;
+	unsigned char unit = xcmd->unitcode;
+	
+	std::shared_ptr <Device> dev = 	XiaomiGateway::getDevice(ssid, 
+									static_cast<int>(packettype), 
+									static_cast<int>(subtype), 
+									static_cast<int>(unit));
+	if (dev)
 	{
-		case sSwitchGeneralSwitch:
+		bool res = dev->writeTo(reinterpret_cast<const unsigned char*>(pCmd), length, m_GatewaySID, key, static_cast<void*>(this));
+		if (res)
 		{
-			/* plug */
-			if (xcmd->unitcode == 1)
-			{
-				commmand = (xcmd->cmnd == gswitch_sOn)?"on":"off";
-				json["params"][0]["channel_0"] = commmand;
-			}
-			else if (xcmd->unitcode == 2)
-			{
-				commmand = (xcmd->cmnd == gswitch_sOn)?"on":"off";
-				json["params"][0]["channel_1"] = commmand;
-			}
-			else if (xcmd->unitcode == 6)
-			{
-				json["sid"] = m_GatewaySID;
-				json["model"] = "gateway";
-				if (xcmd->cmnd == 1)
-				{
-					std::vector<std::vector<std::string> > result;
-					result = m_sql.safe_query("SELECT Value FROM UserVariables WHERE (Name == 'XiaomiMP3')");
-					json["params"][0]["mid"] = result[0][0].c_str();
-				}
-				else
-				{
-					json["params"][0]["mid"] ="10000";
-				}
-			}
-			else if (xcmd->unitcode == 8)
-			{
-				commmand = (xcmd->cmnd == 1)?"on":"off";
-				json["params"][0]["channel_0"] = commmand;
-			}
-			else if (xcmd->unitcode == 9)
-			{
-				commmand = (xcmd->cmnd == 1)?"on":"off";
-				json["params"][0]["channel_0"] = commmand;
-			}
-			else if (xcmd->unitcode == 10)
-			{
-				commmand = (xcmd->cmnd == 1)?"on":"off";
-				json["params"][0]["channel_0"] = commmand;
-			}
-			else if (xcmd->unitcode == 254)
-			{
-				commmand = (xcmd->cmnd == 1)?"on":"off";
-				json["model"] = "gateway";
-				json["params"][0]["join_permission"] = "yes";
-			}
-			else
-			{
-				std::cout<<"sSwitchGeneralSwitch uint unkown"<<std::endl;
-				return -1;
-			}
-			return 0;
+			ret = 0;
 		}
-		break;
-
-		case sSwitchTypeSelector:
-		{
-			 if(xcmd->unitcode >= 3 && xcmd->unitcode <= 5)
-			 {
-				 int level = xcmd->level;
-				 if (level == 0) { level = 10000; }
-				 else {
-					 if (xcmd->unitcode == 3) {
-						 //Alarm Ringtone
-						 if (level > 0) { level = (level / 10) - 1; }
-					 }
-					 else if (xcmd->unitcode == 4) {
-						 //Alarm Clock
-						 if (level > 0) { level = (level / 10) + 19; }
-					 }
-					 else if (xcmd->unitcode == 5) {
-						 //Doorbell
-						 if (level > 0) { level = (level / 10) + 9; }
-					 }
-				 }
-				 json["params"][0]["vol"] =level;
-				 return 0;
-			 }
-			 return 1;
-		}
-		break;
-		case sSwitchBlindsT2:
-		{
-
-		}
-		break;
 	}
-	return -1;
+
+	return ret;
 }
 
-int XiaomiGateway::WriteToColorSwitch(const tRBUF *pCmd,  Json::Value& json)
+int XiaomiGateway::WriteToColorSwitch(const tRBUF *pCmd,  int length, Json::Value& json)
 {
 	unsigned char packettype = pCmd->ICMND.packettype;
 	unsigned char subtype = pCmd->ICMND.subtype;
@@ -1024,7 +1006,7 @@ int XiaomiGateway::WriteToColorSwitch(const tRBUF *pCmd,  Json::Value& json)
 }
 
 
-int XiaomiGateway::WriteToMannageDeive(const tRBUF *pCmd,  Json::Value& json)
+int XiaomiGateway::WriteToMannageDeive(const tRBUF *pCmd,  int length, Json::Value& json)
 {
 	unsigned char packettype = pCmd->ICMND.packettype;
 	unsigned char subtype = pCmd->ICMND.subtype;
@@ -1078,6 +1060,7 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 		m_GatewaySID = XiaomiGatewayTokenManager::GetInstance().GetSID(m_GatewayIp);
 	}
 
+
 	std::string mac = "";
 	int ssid = 0;
 	Json::Value jroot;
@@ -1087,15 +1070,15 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 
 	ret = -1;
 	if (pTypeGeneralSwitch == packettype) {
-		ret = WriteToGeneralSwitch(pCmd, jroot);
+		ret = WriteToGeneralSwitch(pCmd, length, jroot);
 	}
 	else if (pTypeColorSwitch == packettype) {
 
-		ret = WriteToColorSwitch(pCmd, jroot);
+		ret = WriteToColorSwitch(pCmd, length, jroot);
 	}
 	else if (pTypeMannageDevice == packettype)
 	{
-		ret = WriteToMannageDeive(pCmd, jroot);
+		ret = WriteToMannageDeive(pCmd, length, jroot);
 	}
 	if(0 == ret){
 		message = JSonToRawString(jroot);
@@ -1405,7 +1388,7 @@ void XiaomiGateway::InsertUpdateRGBGateway(const std::string & nodeid, const std
 		ycmd.value = brightness;
 		ycmd.command = cmd;
 		m_mainworker.PushAndWaitRxMessage(this, (const unsigned char *)&ycmd, NULL, -1);
-		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', SwitchType=%d, LastLevel=%d WHERE(HardwareID == %d) AND (DeviceID == '%s') AND (Type == %d)", Name.c_str(), (STYPE_Dimmer), brightness, m_HwdID, szDeviceID, pTypeColorSwitch);
+		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', SwitchType=%d, LastLevel=%d WHERE(HardwareID == %d) AND (DeviceID == '%s') AND (Type == %d)", Name.c_str(), static_cast<int>(STYPE_Dimmer), brightness, m_HwdID, szDeviceID, pTypeColorSwitch);
 
 	}
 	else {
@@ -1802,10 +1785,10 @@ std::string XiaomiGateway::GetGatewayKey()
 	{
 		sprintf(&gatewaykey[i * 2], "%02X", ciphertext[i]);
 	}
-//#ifdef _DEBUG
+#ifdef _DEBUG
 	_log.Log(LOG_STATUS, "XiaomiGateway: GetGatewayKey Password - %s, token=%s", m_GatewayPassword.c_str(), token.c_str());
 	_log.Log(LOG_STATUS, "XiaomiGateway: GetGatewayKey key - %s", gatewaykey);
-//#endif
+#endif
 	return gatewaykey;
 #else
 	_log.Log(LOG_ERROR, "XiaomiGateway: GetGatewayKey NO SSL AVAILABLE");
@@ -1825,86 +1808,105 @@ unsigned int XiaomiGateway::GetShortID(const std::string & nodeid)
 	return (sID & 0xffffffff);
 }
 
+#if 0
+std::cout<<std::hex<<type<<std::endl;
+std::cout<<std::hex<<subtype<<std::endl;
+std::cout<<switchtype<<std::endl;
+std::cout<<uint<<std::endl;
+std::cout<<outlet<<std::endl;
+std::cout<<devopt<<std::endl;
+std::cout<<ssid<<std::endl;
+std::cout<<devid<<std::endl;
 
 
+#endif
 
-void XiaomiGateway::CreateNewDevice()
+static inline int customImage(int switchtype)
 {
-	int ii;
-	int ssid;
-	std::string model = "";
-	std::string mac = "";
-
-	std::unique_lock<std::mutex> lock(m_mutex);
-	for (ii = 0; ii < m_DevInfo.size(); ii++)
+	int customimage = 0;
+	if (customimage == 0)
 	{
-		model = boost::get<DY_MODLE>(m_DevInfo[ii]);
-		mac = boost::get<DY_MAC>(m_DevInfo[ii]);
-		CreateNewDevice(model, mac);
-	}
-}
-
-
-void XiaomiGateway::CreateNewDevice(const std::string& model,const std::string& mac)
-{
-	int ii;
-	int type , subtype, switchtype, uint, outlet;
-	uint64_t DeviceRowIdx = (uint64_t)-1;
-
-	std::string name = "";
-	std::string devopt = "";
-	std::string opts = "";
-	std::string devid = "";
-
-	int ssid  = 0;
-	std::vector<std::vector<std::string>> result;
-	result = GetDeviceInfoByModel(model);
-
-	for (ii = 0; ii < result.size(); ii++)
-	{
-		name = result[ii][0];
-		type       = atoi(result[ii][1].c_str());
-		subtype    = atoi(result[ii][2].c_str());
-		switchtype = atoi(result[ii][3].c_str());
-		uint       = atoi(result[ii][4].c_str());
-		outlet       = atoi(result[ii][5].c_str());
-		devopt = result[ii][6];
-		ssid = GetSsidBySid(type, subtype, mac);
-		devid = GetDeviceIdBySsid(type, subtype, ssid);
-		if(m_sql.DoesDeviceExist(m_HwdID, devid.c_str(), uint, type, subtype) == false)
+		if (switchtype == static_cast<int>(STYPE_OnOff))
 		{
-			bool bPrevAcceptNewHardware = m_sql.m_bAcceptNewHardware;
-			m_sql.m_bAcceptNewHardware = true;
-			DeviceRowIdx = m_sql.CreateDevice(m_HwdID, type, subtype, name, ssid, opts);
-			m_sql.m_bAcceptNewHardware = bPrevAcceptNewHardware;
-			if (DeviceRowIdx != (uint64_t)-1)
-			{
-				int customimage = 0;
-				if (customimage == 0)
-				{
-					if (switchtype == STYPE_OnOff)
-					{
-						customimage = 1; //wall socket
-					}
-					else if (switchtype == STYPE_Selector)
-					{
-						customimage = 9;
-					}
-				}
-				m_sql.safe_query("UPDATE DeviceStatus SET Unit=%d, Outlet=%d, SwitchType=%d, CustomImage=%i, Model='%q', Mac='%q' WHERE (HardwareID == %d) AND (ID == %" PRIu64 ")", uint, outlet, switchtype, customimage,  model.c_str(), mac.c_str(), m_HwdID, DeviceRowIdx);
-				if (devopt != "")
-				{
-					m_sql.SetDeviceOptions(DeviceRowIdx, m_sql.BuildDeviceOptions(devopt, false));
-				}
-				_log.Log(LOG_STATUS,  "add new device successful model:%s, ssid:%08X", model.c_str(), ssid);
-			}
-			else
-			{
-				_log.Log(LOG_ERROR,  "add new device failed model:%s, ssid:%08X", model.c_str(), ssid);
-			}
+			customimage = 1; //wall socket
+		}
+		else if (switchtype == static_cast<int>(STYPE_Selector))
+		{
+			customimage = 9;
 		}
 	}
+	return customimage;
 }
+
+
+bool XiaomiGateway::createDtDevice(std::shared_ptr<Device> dev)
+{
+
+	int ii;
+	int type, subType, switchType, uint, outlet;
+	unsigned int ssid;
+	uint64_t DeviceRowIdx = (uint64_t)-1;
+
+	std::string name = dev->getName();
+	std::string model = dev->getZigbeeModel();
+	std::string mac = dev->getMac();
+	auto outletAttr = dev->getOutlet();
+	auto ssidPair =  dev->getSsid();
+
+	std::string devID = "";
+	std::string devOpt = "";
+	std::string opts = "";
+
+	if (ssidPair.size() != outletAttr.size())
+	{		
+		_log.Log(LOG_ERROR,  "outlet number(%lu) not equal ssid number(%lu)", ssidPair.size(), outletAttr.size());
+		return false;
+	}
+
+	std::cout<<name<<std::endl;
+	std::cout<<model<<std::endl;
+	std::cout<<mac<<std::endl;
+	std::cout<<name<<std::endl;
+	
+	ii = 0;
+	for (const auto itt : outletAttr)
+	{
+		type = itt->getType();
+		subType = itt->getSubType();
+		switchType = itt->getSWType();
+		uint = itt->getUnit();
+		outlet = ii;
+		devOpt = itt->getOpts();
+		ssid = ssidPair[ii].first;
+		devID = ssidPair[ii].second;
+		ii++;
+		if(m_sql.DoesDeviceExist(m_HwdID, devID.c_str(), uint, type, subType) == true)
+		{
+			continue;
+		}
+		bool bPrevAcceptNewHardware = m_sql.m_bAcceptNewHardware;
+		m_sql.m_bAcceptNewHardware = true;
+		DeviceRowIdx = m_sql.CreateDevice(m_HwdID, type, subType, name, ssid, opts, uint);
+		m_sql.m_bAcceptNewHardware = bPrevAcceptNewHardware;
+
+		if (DeviceRowIdx == (uint64_t)-1)
+		{
+			_log.Log(LOG_ERROR,  "add new device failed model:%s, ssid:%08X", model.c_str(), ssid);
+			continue;
+		}
+		int cImage = customImage(switchType);
+		m_sql.safe_query("UPDATE DeviceStatus SET Outlet=%d, SwitchType=%d, CustomImage=%i, Model='%q', Mac='%q' WHERE (HardwareID == %d) AND (ID == %" PRIu64 ")", outlet, switchType, cImage,  model.c_str(), mac.c_str(), m_HwdID, DeviceRowIdx);
+		if (devOpt != "")
+		{
+			m_sql.SetDeviceOptions(DeviceRowIdx, m_sql.BuildDeviceOptions(devOpt, false));
+		}
+		_log.Log(LOG_STATUS,  "add new device successful model:%s, ssid:%08X", model.c_str(), ssid);
+	}
+
+	return true;
+}
+
+
 
 XiaomiGateway::xiaomi_udp_server::xiaomi_udp_server(boost::asio::io_service& io_service, int m_HwdID, const std::string &gatewayIp, const std::string &localIp, const bool listenPort9898, const bool outputMessage, const bool includeVoltage, XiaomiGateway *parent)
 	: socket_(io_service, boost::asio::ip::udp::v4())
@@ -1999,6 +2001,18 @@ void XiaomiGateway::xiaomi_udp_server::whois(void)
 	}
 }
 
+
+
+#if 0
+
+if (!dev && model != "gateway" &&  model != "gateway.v3" && model != "acpartner.v3" && model != "TBL-V01-GL")
+{
+	_log.Log(LOG_ERROR, "XiaomiGateway: sid(%s) and model(%s) not in dev list, please export to DT first!", sid.c_str(), model.c_str());
+	start_receive();
+	return;
+}
+
+#endif
 void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error_code & error, std::size_t bytes_recvd)
 {
 
@@ -2025,7 +2039,8 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 
 	Json::Value root;
 	bool showmessage = true;
-	bool ret = ParseJSon(data_, root);
+	std::string message(data_);
+	bool ret = ParseJSon(message, root);
 	if ((!ret) || (!root.isObject()))
 	{
 		_log.Log(LOG_ERROR, "XiaomiGateway: the received data  json format error!");
@@ -2033,25 +2048,17 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 		return;
 	}
 
-	std::string cmd = root[xiaomi::key_cmd].asString();
-	std::string model = root[xiaomi::key_model].asString();
-	std::string sid = root[xiaomi::key_sid].asString();
-	Json::Value params = root[xiaomi::key_params];
+	std::string cmd = root[XiaoMi::key_cmd].asString();
+	std::string model = root[XiaoMi::key_model].asString();
+	std::string sid = root[XiaoMi::key_sid].asString();
+	Json::Value params = root[XiaoMi::key_params];
 
 
 	_log.Log(LOG_STATUS, "XiaomiGateway: cmd  %s received!", cmd.c_str());
 
-
-	std::string check = m_XiaomiGateway->GetDeviceModel(sid);
-	if (check != model && model != "gateway" &&  model != "gateway.v3" && model != "acpartner.v3" && model != "TBL-V01-GL")
-	{
-		_log.Log(LOG_ERROR, "XiaomiGateway: sid(%s) and model(%s) not in dev list, please export to DT first!", sid.c_str(), model.c_str());
-		start_receive();
-		return;
-	}
-
+	
 	int unitcode = 1;
-	if ((cmd == xiaomi::rsp_read) || (cmd ==xiaomi::rsp_write) || (cmd == xiaomi::rep_report) || (cmd == xiaomi::rep_hbeat))
+	if ((cmd == XiaoMi::rsp_read) || (cmd ==XiaoMi::rsp_write) || (cmd == XiaoMi::rep_report) || (cmd == XiaoMi::rep_hbeat))
 	{
 		if(!params.isArray())
 		{
@@ -2059,617 +2066,13 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 			_log.Log(LOG_ERROR, "XiaomiGateway: cmd  %s msg format error!", cmd.c_str());
 			return;
 		}
-		_eSwitchType type = STYPE_END;
-		std::string name = "Error Device";
-
-		/* status */
-		std::string status = "";
-
-		bool commit = false;
-		bool on = false;
-		int level = 0;
-
-		std::string str_battery = "";
-		int battery = 255;
-
-		for (int i = 0; i < (int)params.size(); i++)
+		std::shared_ptr <Device> dev = XiaomiGateway::getDevice(sid);
+		if (dev)
 		{
-			if(params[i].isMember("battery_voltage"))
-			{
-				str_battery = params[i]["battery_voltage"].asString();
-			}
+			dev->recvFrom(message, static_cast<void*>(TrueGateway));
 		}
-		if (str_battery != "" && str_battery != "3600") {
-			battery = ((atoi(str_battery.c_str()) - 2200) / 10);
-		}
-
-		/* 传感器 */
-		if (model == "lumi.motion" || model == "lumi.sensor_motion.aq2" || model == "RH3040" || model == "FNB54-BOT0AML0.9")
-		{
-			commit = false;
-			type = STYPE_Motion;
-			int ilux = -1;
-			for (int i = 0; i < (int)params.size(); i++)
-			{
-				if(params[i].isMember("motion_status"))
-				{
-					status = params[i]["motion_status"].asString();
-					on = (status ==  "motion")? true : false;
-					level = (status ==  "motion")? 10:0;
-					commit = true;
-				}
-				else if(params[i].isMember("lux"))
-				{
-					ilux = params[i]["lux"].asInt();
-				}
-				else if (params[i].isMember("illumination"))
-				{
-					ilux = params[i]["illumination"].asInt();
-				}
-			}
-			if (commit)
-			{
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
-			}
-			if (ilux > 0)
-			{
-				//TrueGateway->InsertUpdateLux(sid.c_str(), name, ilux, battery);
-			}
-		}
-		else if ((model == "lumi.magnet") || (model == "lumi.sensor_magnet.aq2") || (model == "FNB54-DOS09ML0.7"))
-		{
-			commit = false;
-			type = STYPE_Contact;
-			for (int i = 0; i < (int)params.size(); i++)
-			{
-				if(params[i].isMember("window_status"))
-				{
-					status = params[i]["window_status"].asString();
-					on = (status ==  "open")?true : false;
-					level = (status ==  "open")?10 : 0;
-					commit = true;
-				}
-			}
-			if (commit)
-			{
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
-			}
-		}
-		else if (model == "lumi.sensor_ht" || model == "lumi.weather.v1" || model == "lumi.weather" || model == "RH3052"
-			|| model == "FNB54-THM17ML1.1" )
-		{
-			bool bTHP = false;
-			bool bTH = false;
-			bool bTemp = false;
-
-			if (model == "lumi.sensor_ht")
-			{
-				bTH = true;
-			}
-			else if (model == "lumi.weather.v1" || model == "lumi.weather" )
-			{
-				bTHP = true;
-			}
-			else if (model == "RH3052")
-			{
-				bTH = true;
-			}
-
-			std::string temperature = "";
-			std::string humidity = "";
-			std::string pressure = "";
-
-			for (int i = 0; i < (int)params.size(); i++)
-			{
-				if(params[i].isMember("temperature"))
-				{
-					temperature = params[i]["temperature"].asString();
-				}
-				else if (params[i].isMember("humidity"))
-				{
-					humidity = params[i]["humidity"].asString();
-				}
-				else if (params[i].isMember("pressure"))
-				{
-					pressure = params[i]["pressure"].asString();
-				}
-			}
-
-			if (bTHP)
-			{
-				TrueGateway->InsertUpdateTempHumPressure(sid.c_str(), name, temperature, humidity, pressure, battery);
-			}
-			else if (bTH)
-			{
-				TrueGateway->InsertUpdateTempHum(sid.c_str(), name, temperature, humidity, battery);
-			}
-
-#if 0
-			if ((!stemperature.empty()) && (!shumidity.empty()) && (!spressure.empty()))
-			{
-				fpressure = static_cast<float>(atof(spressure.c_str())) / 100.0f;
-				//Temp+Hum+Baro
-				ftemperature = (float)atof(stemperature.c_str()) / 100.0f;
-				ihumidity = atoi(shumidity.c_str()) / 100;
-				TrueGateway->InsertUpdateTempHumPressure(sid.c_str(), "Xiaomi TempHumBaro", ftemperature, ihumidity, fpressure, battery);
-			}
-			else if ((!stemperature.empty()) && (!shumidity.empty()))
-			{
-				//Temp+Hum
-				ftemperature = (float)atof(stemperature.c_str()) / 100.0f;
-				ihumidity = atoi(shumidity.c_str()) / 100;
-				TrueGateway->InsertUpdateTempHum(sid.c_str(), "Xiaomi TempHum", ftemperature, ihumidity, battery);
-			}
-			else if (stemperature != "") {
-				ftemperature = (float)atof(stemperature.c_str()) / 100.0f;
-				if (ftemperature < 99) {
-					TrueGateway->InsertUpdateTemperature(sid.c_str(), "Xiaomi Temperature", ftemperature, battery);
-				}
-			}
-			else if (shumidity != "") {
-				ihumidity = atoi(shumidity.c_str()) / 100;
-				if (ihumidity > 1) {
-					TrueGateway->InsertUpdateHumidity(sid.c_str(), "Xiaomi Humidity", ihumidity, battery);
-				}
-			}
-			else if (spressure != "") {
-				fpressure = static_cast<float>(atof(spressure.c_str())) / 100.0f;
-				if (fpressure > 1) {
-					TrueGateway->InsertUpdatePressure(sid.c_str(), "Xiaomi Pressure", fpressure, battery);
-				}
-			}
-#endif
-		}
-		/* 状态型 */
-		else if (model == "lumi.plug" || model == "lumi.plug.maeu01" ||
-				model == "lumi.86plug" || model == "lumi.ctrl_86plug.aq1" ||
-				model == "lumi.ctrl_neutral1" || model == "lumi.ctrl_ln1" || model == "lumi.ctrl_ln1.aq1" ||
-				model == "lumi.ctrl_neutral2" || model == "lumi.ctrl_ln2" || model == "lumi.ctrl_ln2.aq1")
-		{
-			commit = false;
-			std::string load_power = "";
-			std::string  consumed = "";
-
-			type = STYPE_OnOff;
-			for (int i = 0; i < (int)params.size(); i++)
-			{
-				if(params[i].isMember("channel_0"))
-				{
-					status = params[i]["channel_0"].asString();
-					on = (status ==  "on")?true : false;
-					level = (status ==  "on")?10 : 0;
-					commit = true;
-					unitcode = 1;
-				}
-				else if(params[i].isMember("channel_1"))
-				{
-					status = params[i]["channel_1"].asString();
-					on = (status ==  "on")?true : false;
-					level = (status ==  "on")?10 : 0;
-					commit = true;
-					unitcode =  2;
-				}
-				else if (params[i].isMember("load_power"))
-				{
-					load_power = params[i]["load_power"].asString();
-				}
-				else if (params[i].isMember("energy_consumed"))
-				{
-					consumed = params[i]["energy_consumed"].asString();
-				}
-			}
-			if (load_power != "" || consumed != "")
-			{
-				TrueGateway->InsertUpdateKwh(sid, name, load_power, consumed, battery);
-			}
-			if (commit)
-			{
-				sleep_milliseconds(200);
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, load_power, consumed, battery);
-			}
-		}
-
-		/* 动作型 */
-		else if ((model == "lumi.switch") || (model == "lumi.remote.b1acn01") ||
-			model == "lumi.sensor_switch.aq2" ||
-			model == "lumi.sensor_switch.aq3" ||
-			model == "lumi.86sw1" || model == "lumi.remote.b186acn01" || model == "lumi.sensor_86sw1.aq1" ||
-			model == "lumi.86sw2" || model == "lumi.remote.b286acn01" || model == "lumi.sensor_86sw1.aq1" ||
-			model == "TS0041")
-		{
-			type = STYPE_Selector;
-			int level = 0;
-			int channel = 0;
-			on = false;
-
-			std::string dual_chn = "";
-			for (int i = 0; i < (int)params.size(); i++)
-			{
-
-				if(params[i].isMember("button_0"))
-				{
-					status = params[i]["button_0"].asString();
-				}
-				else if(params[i].isMember("button_1"))
-				{
-					status = params[i]["button_1"].asString();
-					channel = 1;
-				}
-				else if (params[i].isMember("dual_channel"))
-				{
-					dual_chn = params[i]["dual_channel"].asString();
-				}
-			}
-
-			if (status == "click")
-			{
-				level = (channel == 0)? 10:40;
-				on = true;
-			}
-			else if (status == "double_click")
-			{
-				level = (channel == 0)? 20:50;
-				on = true;
-			}
-			else if (status == "long_click")
-			{
-				level = (channel == 0)?30:60;
-				on = true;
-			}
-			else if (status == "shake")
-			{
-				level = 40;
-				on = true;
-			}
-			else if (dual_chn == "click")
-			{
-				level = 70;
-				on = true;
-			}
-			else if (dual_chn == "double_click")
-			{
-				level = 80;
-				on = true;
-			}
-			else if (dual_chn == "long_click")
-			{
-				level = 90;
-				on = true;
-			}
-
-			if (on)
-			{
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
-			}
-		}
-		/* 动作型 */
-		else if (model == "lumi.cube" || model == "lumi.sensor_cube.aqgl01")
-		{
-
-			type = STYPE_Selector;
-			std::string rdegree = "";
-			std::string  rtime = "";
-			commit = false;
-
-			for (int i = 0; i < (int)params.size(); i++)
-			{
-				if(params[i].isMember("cube_status"))
-				{
-					status = params[i]["cube_status"].asString();
-					commit = true;
-				}
-				else if(params[i].isMember("rotate_degree"))
-				{
-					rdegree = params[i]["rotate_degree"].asString();
-					commit = true;
-				}
-				else if (params[i].isMember("detect_time"))
-				{
-					rtime = params[i]["detect_time"].asString();
-					commit = true;
-				}
-			}
-
-			if (status == "flip90")
-			{
-				level = 10;
-			}
-			else if (status == "flip180")
-			{
-				level = 20;
-			}
-			else if (status == "move")
-			{
-				level = 30;
-			}
-			else if (status == "tap_twice")
-			{
-				level = 40;
-			}
-			else if (status == "shake")
-			{
-				level = 50;
-			}
-			else if (status == "swing")
-			{
-				level = 00;
-			}
-			else if (status == "alert")
-			{
-				level = 00;
-			}
-			else if (status == "free_fall")
-			{
-				level = 00;
-			}
-			else if (status == "rotate")
-			{
-				level = 90;
-			}
-			if (level > 0)
-			{
-				on = true;
-				//status = status +"  "+ rdegree +"degree in "+ rtime +"ms";
-				//TrueGateway->InsertUpdateCubeText(sid.c_str(), name, status.c_str());
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
-			}
-		}
-		/* 动作型 */
-		else if (model == "lumi.vibration" || model == "lumi.vibration.aq1")
-		{
-			std::string angle = "";
-			type = STYPE_Selector;
-			for (int i = 0; i < (int)params.size(); i++)
-			{
-				if(params[i].isMember("status"))
-				{
-					status = params[i]["status"].asString();
-					commit = true;
-				}
-				if(params[i].isMember("angle"))
-				{
-					angle = params[i]["angle"].asString();
-					commit = true;
-				}
-			}
-			if (status == "touch")
-			{
-				level = 10;
-				on = true;
-			}
-			else if (status == "tilt")
-			{
-				level = 20;
-				on = true;
-			}
-			else if (status == "drop")
-			{
-				level = 30;
-				on = true;
-			}
-
-			if (angle != "")
-			{
-				status = "angle : " + angle;
-			}
-			if (commit)
-			{
-				//TrueGateway->InsertUpdateCubeText(sid.c_str(), name, status.c_str());
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
-			}
-		}
-		else if (model == "smoke" || model == "natgas" ||
-				 model == "lumi.sensor_wleak.aq1"
-				|| model == "FNB54-WTS08ML1.0" || model == "FNB54-SMF0AML0.9" || model == "FNB54-GAS07ML0.8")
-		{
-
-			type = STYPE_SMOKEDETECTOR;
-
-			for (int i = 0; i < (int)params.size(); i++)
-			{
-				if(params[i].isMember("wleak_status"))
-				{
-					status = params[i]["wleak_status"].asString();
-					commit = true;
-				}
-				else if(params[i].isMember("natgas_status"))
-				{
-					status = params[i]["natgas_status"].asString();
-					commit = true;
-				}
-				else if (params[i].isMember("smoke_status"))
-				{
-					status = params[i]["smoke_status"].asString();
-					commit = true;
-				}
-			}
-			if (status == "leak")
-			{
-				unitcode = 1;
-				level = 10;
-				on = true;
-			}
-
-			if (commit)
-			{
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
-			}
-
-		}
-		else if (model == "curtain")
-		{
-			type = STYPE_BlindsPercentage;
-
-			on = false;
-			std::string curtain_level = "";
-			for (int i = 0; i < (int)params.size(); i++)
-			{
-				if(params[i].isMember("curtain_status"))
-				{
-					status = params[i]["curtain_status"].asString();
-					commit = true;
-				}
-				else if(params[i].isMember("curtain_level"))
-				{
-					curtain_level = params[i]["curtain_level"].asString();
-					commit = true;
-				}
-			}
-
-			if(status == "open" )
-			{
-				on = true;
-			}
-			if (commit)
-			{
-				level = atoi(curtain_level.c_str());
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
-			}
-
-		}
-		else if (model == "lumi.dimmer.rgbegl01" || model == "lumi.light.aqcn02")
-		{
-			std::string light_level = "";
-			std::string light_rgb = "";
-			std::string color_temp = "";
-			static unsigned int oldbrightness = 0;
-			unsigned int irgb = 0;
-			unsigned int ib = 0;
-			unsigned int it = 0;
-
-			bool brgb = false;
-			bool bb = false;
-			bool bt = false;
-			int action = -1;
-
-			for (int i = 0; i < (int)params.size(); i++)
-			{
-				if(params[i].isMember("power_status"))
-				{
-					status = params[i]["power_status"].asString();
-				}
-				else if(params[i].isMember("light_rgb"))
-				{
-					light_rgb = params[i]["light_rgb"].asString();
-					brgb = true;
-				}
-				else if(params[i].isMember("light_level"))
-				{
-					light_level  = params[i]["light_level"].asString();
-					bb = true;
-				}
-				else if(params[i].isMember("color_temp"))
-				{
-					color_temp = params[i]["color_temp"].asString();
-					bt = true;
-					std::cout<<"--------color_temp----"<<color_temp<<std::endl;
-				}
-			}
-			if(status == "on")
-			{
-			}
-			if (light_rgb != "")
-			{
-				std::cout<<"--------bbbrgb----"<<std::endl;
-			}
-
-			if (light_level != "")
-			{
-				std::cout<<"--------bb----"<<std::endl;
-				int ib = 0;
-				ib = atoi(light_level.c_str());
-				//ib = (ib*0x64 + 0xfe) / 0xff;
-				light_level = std::to_string(ib);
-			}
-
-			if (light_rgb != "" || light_level != "")
-			{
-				TrueGateway->InsertUpdateRGBLight(sid, name, sTypeColor_CW_WW, ColorModeRGB, light_rgb, light_level, false, battery);
-			}
-			_log.Log(LOG_STATUS, "led: rgb:%s   brightness_hex:%s", light_rgb.c_str(), light_level.c_str());
-
-		}
-		else if (model == "gateway" || model == "gateway.v3" || model == "acpartner.v3" || model == "TBL-V01-GL")
-		{
-			name = "Xiaomi RGB Gateway";
-			if (model == "TBL-V01-GL")
-			{
-				name = "Tenbay Gateway";
-			}
-
-			//check for token
-			std::string token = root["token"].asString();
-			std::string ip = "";
-			std::string jb = "";
-			for (int i = 0; i < (int)params.size(); i++)
-			{
-				if(params[i].isMember("ip"))
-				{
-					ip = params[i]["ip"].asString();
-				}
-				if(params[i].isMember("JoinButton"))
-				{
-					jb = params[i]["JoinButton"].asString();
-				}
-			}
-			if ((token != "") && (ip != "")) {
-				XiaomiGatewayTokenManager::GetInstance().UpdateTokenSID(ip, token, sid);
-				showmessage = false;
-			}
-
-			if (jb != "")
-			{
-				bool ison = (jb == "on")?true:false;
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Join Button", ison, STYPE_OnOff, 254, 0, cmd, "", "", 255);
-			}
-
-			if (model != "TBL-V01-GL")
-			{
-				std::string srgb = "";
-				for (int i = 0; i < (int)params.size(); i++)
-				{
-					if(params[i].isMember("argb_value"))
-					{
-						srgb = params[i]["argb_value"].asString();
-					}
-				}
-
-				if (srgb != "")
-				{
-					// Only add in the gateway that matches the SID for this hardware.
-					if (TrueGateway->GetGatewaySid() == sid)
-					{
-						std::stringstream ss;
-						ss << std::hex << atoi(srgb.c_str());
-						std::string hexstring(ss.str());
-						if (hexstring.length() == 7) {
-							hexstring.insert(0, "0");
-						}
-						std::string bright_hex = hexstring.substr(0, 2);
-						std::stringstream ss2;
-						ss2 << std::hex << bright_hex.c_str();
-						int brightness = strtoul(bright_hex.c_str(), NULL, 16);
-						bool on = false;
-						if (srgb != "0") {
-							on = true;
-						}
-						TrueGateway->InsertUpdateRGBGateway(sid.c_str(), name + " (" + TrueGateway->GetGatewayIp() + ")", on, brightness, 0);
-						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Ringtone", false, STYPE_Selector, 3, 0, cmd, "", "", 255);
-						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Clock", false, STYPE_Selector, 4, 0, cmd, "", "", 255);
-						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Doorbell", false, STYPE_Selector, 5, 0, cmd, "", "", 255);
-						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway MP3", false, STYPE_OnOff, 6, 0, cmd, "", "", 255);
-						TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Volume", false, STYPE_Dimmer, 7, 0, cmd, "", "", 255);
-					}
-				}
-			}
-		}
-		else
-		{
-			_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): unhandled model: %s, sid: %s", TrueGateway->GetGatewayHardwareID(), model.c_str(), sid.c_str());
-		}
-		_log.Log(LOG_STATUS,  "type:%d Model:%s", type, model.c_str());
 	}
-	else if (cmd == xiaomi::rsp_discorey)
+	else if (cmd == XiaoMi::rsp_discorey)
 	{
 		Json::Value list = root["dev_list"];
 		std::string sid = "";
@@ -2707,9 +2110,8 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 				continue;
 			}
 
-
-			bool res = TrueGateway->SetDeviceInfo(sid, model);
-			if(false == res)
+			const DevAttr* attr = XiaomiGateway::findDevAttr(model);
+			if(nullptr == attr)
 			{
 				Json::Value del_cmd;
 				del_cmd["cmd"] = "write";
@@ -2722,6 +2124,13 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 				continue;
 			}
 
+			if (XiaomiGateway::getDevice(sid).get() == nullptr)
+			{
+				std::shared_ptr<Device> dev(new Device (sid, attr)); 
+				XiaomiGateway::addDeviceToMap(sid, dev);
+				TrueGateway->createDtDevice(dev);
+			}
+
 			Json::Value read_cmd;
 			read_cmd["cmd"] = "read";
 			read_cmd["sid"] = sid;
@@ -2730,11 +2139,9 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 			socket_.send_to(boost::asio::buffer(*send_buff), remote_endpoint);
 			_log.Log(LOG_STATUS,  "send to GW :%s", message.c_str());
 		}
-
-		TrueGateway->CreateNewDevice();
 		showmessage = false;
 	}
-	else if (cmd == xiaomi::rsp_whois)
+	else if (cmd == XiaoMi::rsp_whois)
 	{
 		if (!root.isMember("ip") || !root.isMember("port"))
 		{
@@ -2753,14 +2160,6 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 			{
 				_log.Log(LOG_STATUS, "XiaomiGateway: RGB Gateway Detected");
 
-				TrueGateway->InsertUpdateRGBGateway(sid.c_str(), "Xiaomi RGB Gateway (" + ip + ")", false, 0, 100);
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Ringtone", false, STYPE_Selector, 3, 0, cmd, "", "", 255);
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Alarm Clock", false, STYPE_Selector, 4, 0, cmd, "", "", 255);
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Doorbell", false, STYPE_Selector, 5, 0, cmd, "", "", 255);
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway MP3", false, STYPE_OnOff, 6, 0, cmd, "", "", 255);
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Volume", false, STYPE_Dimmer, 7, 0, cmd, "", "", 255);
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), "Xiaomi Gateway Join Button", false, STYPE_OnOff, 254, 0, cmd, "", "", 255);
-
 				//query for list of devices
 				std::string message = "{\"cmd\" : \"discovery\"}";
 				std::shared_ptr<std::string> message2(new std::string(message));
@@ -2775,7 +2174,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 			{
 				_log.Log(LOG_STATUS, "Tenbat Gateway: RGB Gateway Detected");
 
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), "Gateway Join Button", false, STYPE_OnOff, 254, 0, cmd, "", "", 255);
+				TrueGateway->InsertUpdateSwitch(sid.c_str(), "Gateway Join Button", false, static_cast<const _eSwitchType>(STYPE_OnOff), 254, 0, cmd, "", "", 255);
 				std::string message = "{\"cmd\" : \"discovery\"}";
 				std::shared_ptr<std::string> message2(new std::string(message));
 				boost::asio::ip::udp::endpoint remote_endpoint;
@@ -2846,6 +2245,14 @@ std::string XiaomiGateway::XiaomiGatewayTokenManager::GetSID(const std::string &
 	}
 	return sid;
 }
+
+
+
+
+
+
+
+
 
 
 namespace http {
@@ -2951,4 +2358,108 @@ namespace http {
 
 		}
 }
+
+
+
+
+
+#if 0
+	mac = GetDeviceMac(ssid);
+	json["sid"]=mac.c_str();
+	json["model"] = GetDeviceModel(ssid);
+
+	switch (subtype)
+	{
+		case sSwitchGeneralSwitch:
+		{
+			/* plug */
+			if (xcmd->unitcode == 1)
+			{
+				commmand = (xcmd->cmnd == gswitch_sOn)?"on":"off";
+				json["params"][0]["channel_0"] = commmand;
+			}
+			else if (xcmd->unitcode == 2)
+			{
+				commmand = (xcmd->cmnd == gswitch_sOn)?"on":"off";
+				json["params"][0]["channel_1"] = commmand;
+			}
+			else if (xcmd->unitcode == 6)
+			{
+				json["sid"] = m_GatewaySID;
+				json["model"] = "gateway";
+				if (xcmd->cmnd == 1)
+				{
+					std::vector<std::vector<std::string> > result;
+					result = m_sql.safe_query("SELECT Value FROM UserVariables WHERE (Name == 'XiaomiMP3')");
+					json["params"][0]["mid"] = result[0][0].c_str();
+				}
+				else
+				{
+					json["params"][0]["mid"] ="10000";
+				}
+			}
+			else if (xcmd->unitcode == 8)
+			{
+				commmand = (xcmd->cmnd == 1)?"on":"off";
+				json["params"][0]["channel_0"] = commmand;
+			}
+			else if (xcmd->unitcode == 9)
+			{
+				commmand = (xcmd->cmnd == 1)?"on":"off";
+				json["params"][0]["channel_0"] = commmand;
+			}
+			else if (xcmd->unitcode == 10)
+			{
+				commmand = (xcmd->cmnd == 1)?"on":"off";
+				json["params"][0]["channel_0"] = commmand;
+			}
+			else if (xcmd->unitcode == 254)
+			{
+				commmand = (xcmd->cmnd == 1)?"on":"off";
+				json["model"] = "gateway";
+				json["params"][0]["join_permission"] = "yes";
+			}
+			else
+			{
+				std::cout<<"sSwitchGeneralSwitch uint unkown"<<std::endl;
+				return -1;
+			}
+			return 0;
+		}
+		break;
+
+		case sSwitchTypeSelector:
+		{
+			 if(xcmd->unitcode >= 3 && xcmd->unitcode <= 5)
+			 {
+				 int level = xcmd->level;
+				 if (level == 0) { level = 10000; }
+				 else {
+					 if (xcmd->unitcode == 3) {
+						 //Alarm Ringtone
+						 if (level > 0) { level = (level / 10) - 1; }
+					 }
+					 else if (xcmd->unitcode == 4) {
+						 //Alarm Clock
+						 if (level > 0) { level = (level / 10) + 19; }
+					 }
+					 else if (xcmd->unitcode == 5) {
+						 //Doorbell
+						 if (level > 0) { level = (level / 10) + 9; }
+					 }
+				 }
+				 json["params"][0]["vol"] =level;
+				 return 0;
+			 }
+			 return 1;
+		}
+		break;
+		case sSwitchBlindsT2:
+		{
+
+		}
+		break;
+	}
+#endif
+
 

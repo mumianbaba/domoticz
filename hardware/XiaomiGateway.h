@@ -6,6 +6,22 @@
 #include <list>
 #include <mutex>
 #include <map>
+#include <memory>
+#include <iostream>
+#include <string>
+
+#include "Xiaomi/Outlet.hpp"
+#include "Xiaomi/DevAttr.hpp"
+#include "Xiaomi/Device.hpp"
+
+
+namespace XiaoMi{
+
+
+typedef std::map <std::string, DevAttr*> AttrMap;
+typedef std::map <std::string, std::shared_ptr<Device>> DeviceMap;
+
+
 
 
 #define MAX_LOG_LINE_LENGTH (2048*3)
@@ -35,9 +51,9 @@ public:
 	~XiaomiGateway(void);
 	bool WriteToHardware(const char *pdata, const unsigned char length) override;
 
-	int	WriteToGeneralSwitch(const tRBUF *pCmd,  Json::Value& json);
-	int WriteToColorSwitch(const tRBUF *pCmd,  Json::Value& json);
-	int WriteToMannageDeive(const tRBUF *pCmd,  Json::Value& json);
+	int	WriteToGeneralSwitch(const tRBUF *pCmd, int length,Json::Value& json);
+	int WriteToColorSwitch(const tRBUF *pCmd, int length, Json::Value& json);
+	int WriteToMannageDeive(const tRBUF *pCmd, int length, Json::Value& json);
 
 	int GetGatewayHardwareID(){ return m_HwdID; };
 	std::string GetGatewayIp(){ return m_GatewayIp; };
@@ -73,17 +89,26 @@ public:
 	void 		 SetDevInfoInited(bool flag){m_bDevInfoInited=flag;}
 
 
-	void CreateNewDevice();
-	void CreateNewDevice(const std::string& model, const std::string& mac);
+	bool createDtDevice(std::shared_ptr<Device> dev);
 
+
+	static void initDeviceAttrMap(const DevInfo devInfo[], int size);
+	static void addDeviceToMap(std::string& mac, std::shared_ptr<Device> ptr);
+	static void delDeviceFromMap(std::string& mac);
+	static const DevAttr* findDevAttr(std::string& model);
+
+	static std::shared_ptr<Device> getDevice(std::string& mac);
+	static std::shared_ptr<Device> getDevice(unsigned int ssid, int type, int subType, int unit);
 
 public:
 	static std::vector<boost::tuple<std::string, std::string, int, int, int, int, int, std::string> >  m_SpDevice;
 private:
 	bool m_bDevInfoInited;
+	static AttrMap m_attrMap;
+	static DeviceMap m_deviceMap;
 
 
-private:
+public:
 	bool StartHardware() override;
 	bool StopHardware() override;
 	void Do_Work();
@@ -177,3 +202,5 @@ private:
 		~XiaomiGatewayTokenManager() { ; }
 	};
 };
+
+}

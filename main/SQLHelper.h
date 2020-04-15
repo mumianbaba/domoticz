@@ -408,7 +408,7 @@ public:
 	void DeleteUserVariable(const std::string &idx);
 	bool CheckUserVariable(const _eUsrVariableType eVartype, const std::string &varvalue, std::string &errorMessage);
 
-	uint64_t CreateDevice(const int HardwareID, const int SensorType, const int SensorSubType, std::string &devname, const unsigned long nid, const std::string &soptions);
+	uint64_t CreateDevice(const int HardwareID, const int SensorType, const int SensorSubType, std::string &devname, const unsigned long nid, const std::string &soptions, unsigned char unit = 1);
 
 	void UpdateDeviceValue(const char * FieldName , const std::string &Value , const std::string &Idx );
 	void UpdateDeviceValue(const char * FieldName , const int Value , const std::string &Idx )   ;
