@@ -782,13 +782,12 @@ void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Child
 	sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
 }
 
-void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Unit, const int OnOff, const int Level, const _tColor color, const int BatteryLevel)
+void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Unit, const uint8_t SubType, const int OnOff, const int Level, const _tColor color, const int BatteryLevel)
 {
 	int level = int(Level);
-	uint8_t subType;
 	_tColorSwitch lcmd;
 	lcmd.id = NodeID;
-	lcmd.subtype = subType;
+	lcmd.subtype = SubType;
 	lcmd.color = color;
 
 	switch(color.mode)

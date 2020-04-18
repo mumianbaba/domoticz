@@ -761,7 +761,7 @@ bool LedOutlet::recvFrom(std::string& root, void * miGateway) const
 			std::cout<<boost::get<0>(result[0])<<" value out of range"<<std::endl;
 			return false;
 		}
-		gw->InsertUpdateRGBLight(mac, getUnit(), Onoff, level, color, battery);
+		gw->InsertUpdateRGBLight(mac, getUnit(), getSubType(), Onoff, level, color, battery);
 	}
 	
 	switch(m_type)
@@ -831,7 +831,7 @@ bool LedOutlet::recvFrom(std::string& root, void * miGateway) const
 			return false;
 		break;
 	}
-	gw->InsertUpdateRGBLight(mac, getUnit(), Color_SetColor, level, color, battery);
+	gw->InsertUpdateRGBLight(mac, getUnit(), getSubType(), Color_SetColor, level, color, battery);
 	return true;
 }
 

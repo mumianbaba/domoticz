@@ -1349,7 +1349,7 @@ void XiaomiGateway::InsertUpdateTempHum(const std::string &nodeid, const std::st
 }
 
 
-void XiaomiGateway::InsertUpdateRGBLight(const std::string & NodeID, unsigned char Unit, const int OnOff, const std::string& Brightness, const _tColor&  Color, const int battery)
+void XiaomiGateway::InsertUpdateRGBLight(const std::string & NodeID,const unsigned char Unit, const unsigned char SubType,const int OnOff, const std::string& Brightness, const _tColor&  Color, const int battery)
 {
 	unsigned int sID = GetShortID(NodeID);
 	if (sID > 0)
@@ -1382,7 +1382,7 @@ void XiaomiGateway::InsertUpdateRGBLight(const std::string & NodeID, unsigned ch
 			_log.Log(LOG_ERROR, "led off , do not update all value");
 			return;
 		}
-		SendRGBWSwitch(sID, Unit, OnOff, bright, Color, battery);
+		SendRGBWSwitch(sID, Unit, SubType, OnOff, bright, Color, battery);
 
 		std::cout<<"nvalue:"<<nvalue<<"	 lastlevel:"<<lastLevel<<"  bright:"<<bright<<std::endl;;
 	}
