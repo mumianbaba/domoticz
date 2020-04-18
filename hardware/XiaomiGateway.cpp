@@ -13,6 +13,8 @@
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <inttypes.h>
+#include <boost/algorithm/algorithm.hpp>
+
 
 #ifndef WIN32
 #include <ifaddrs.h>
@@ -758,12 +760,12 @@ XiaomiGateway::XiaomiGateway(const int ID)
 	RegisterSupportDevice("RH3052", "Tuya Temp Sensor", pTypeTEMP_HUM, sTypeTH5, STYPE_OnOff, 1, 0, "");
 	RegisterSupportDevice("TS0041", "Tuya Wireless Single Switch", pTypeGeneralSwitch, sSwitchTypeSelector, STYPE_Selector, 1, 0, "SelectorStyle:0;LevelNames:Off|Click|Double Click|Long Click");
 
-	RegisterSupportDevice("FNB54-WTS08ML1.0", "CY Water Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_SMOKEDETECTOR, 1, 0, "");
-	RegisterSupportDevice("FNB54-DOS09ML0.7", "CY Door Sensor",  pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_Contact, 1, 0, "");
-	RegisterSupportDevice("FNB54-THM17ML1.1", "CY Temp Sensor", pTypeTEMP_HUM, sTypeTH5, STYPE_OnOff, 1, 0, "");
-	RegisterSupportDevice("FNB54-SMF0AML0.9", "CY Smoke Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_SMOKEDETECTOR, 1, 0, "");
-	RegisterSupportDevice("FNB54-GAS07ML0.8", "CY GAS Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_SMOKEDETECTOR, 1, 0, "");
-	RegisterSupportDevice("FNB54-BOT0AML0.9", "CY Motion Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_Motion, 1, 0, "");
+	RegisterSupportDevice("FNB54-WTS08ML1.0", "Feibit Water Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_SMOKEDETECTOR, 1, 0, "");
+	RegisterSupportDevice("FNB54-DOS09ML0.7", "Feibit Door Sensor",  pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_Contact, 1, 0, "");
+	RegisterSupportDevice("FNB54-THM17ML1.1", "Feibit Temp Sensor", pTypeTEMP_HUM, sTypeTH5, STYPE_OnOff, 1, 0, "");
+	RegisterSupportDevice("FNB54-SMF0AML0.9", "Feibit Smoke Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_SMOKEDETECTOR, 1, 0, "");
+	RegisterSupportDevice("FNB54-GAS07ML0.8", "Feibit GAS Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_SMOKEDETECTOR, 1, 0, "");
+	RegisterSupportDevice("FNB54-BOT0AML0.9", "Feibit Motion Sensor", pTypeGeneralSwitch, sSwitchGeneralSwitch, STYPE_Motion, 1, 0, "");
 }
 
 XiaomiGateway::~XiaomiGateway(void)
@@ -1862,7 +1864,7 @@ void XiaomiGateway::CreateNewDevice(const std::string& model,const std::string& 
 
 	for (ii = 0; ii < result.size(); ii++)
 	{
-		name = result[ii][0];
+		//name = result[ii][0];
 		type       = atoi(result[ii][1].c_str());
 		subtype    = atoi(result[ii][2].c_str());
 		switchtype = atoi(result[ii][3].c_str());
@@ -2038,7 +2040,6 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 	std::string sid = root[xiaomi::key_sid].asString();
 	Json::Value params = root[xiaomi::key_params];
 
-
 	_log.Log(LOG_STATUS, "XiaomiGateway: cmd  %s received!", cmd.c_str());
 
 
@@ -2150,7 +2151,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 			{
 				bTHP = true;
 			}
-			else if (model == "RH3052")
+			else if (model == "RH3052" || model == "FNB54-THM17ML1.1")
 			{
 				bTH = true;
 			}
@@ -2464,32 +2465,32 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 		{
 
 			type = STYPE_SMOKEDETECTOR;
+			unitcode = 1;
 
 			for (int i = 0; i < (int)params.size(); i++)
 			{
 				if(params[i].isMember("wleak_status"))
 				{
 					status = params[i]["wleak_status"].asString();
+					on = (status == "leak") ? true : false;
+					level = (status == "leak") ? 10 : 0;
 					commit = true;
 				}
-				else if(params[i].isMember("natgas_status"))
+				else if(params[i].isMember("gas_status"))
 				{
-					status = params[i]["natgas_status"].asString();
+					status = params[i]["gas_status"].asString();
+					on = (status == "yes") ? true : false;
+					level = (status == "yes") ? 10 : 0;
 					commit = true;
 				}
 				else if (params[i].isMember("smoke_status"))
 				{
 					status = params[i]["smoke_status"].asString();
+					on = (status == "yes") ? true : false;
+					level = (status == "yes") ? 10 : 0;
 					commit = true;
 				}
 			}
-			if (status == "leak")
-			{
-				unitcode = 1;
-				level = 10;
-				on = true;
-			}
-
 			if (commit)
 			{
 				TrueGateway->InsertUpdateSwitch(sid.c_str(), name, on, type, unitcode, level, cmd, "", "", battery);
@@ -2706,8 +2707,6 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 			{
 				continue;
 			}
-
-
 			bool res = TrueGateway->SetDeviceInfo(sid, model);
 			if(false == res)
 			{

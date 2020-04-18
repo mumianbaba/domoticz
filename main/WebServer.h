@@ -183,6 +183,7 @@ private:
 	void Cmd_AddPlanActiveDevice(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_GetPlanDevices(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_DeletePlanDevice(WebEmSession & session, const request& req, Json::Value &root);
+	void Cmd_UpdataPlanDevice(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_SetPlanDeviceCoords(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_DeleteAllPlanDevices(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ChangePlanOrder(WebEmSession & session, const request& req, Json::Value &root);
@@ -394,7 +395,8 @@ private:
 	bool m_bDoStop;
 	std::string m_server_alias;
 	std::string ConverParams(const request &req, bool isSubDev = false);
-	std::vector<std::string> GetDevicesIdByMac(std::string mac);
+	std::vector<std::string> GetDeviceIdsByMac(std::string mac);
+	std::string PagingToSql(const request& req);
 
 };
 
