@@ -5,7 +5,11 @@
 #include "DevAttr.hpp"
 #include "Outlet.hpp"
 
-using namespace XiaoMi;
+//using namespace XiaoMi;
+
+
+
+namespace XiaoMi{
 
 
 bool DevID::match(std::string& mac) const
@@ -52,14 +56,47 @@ Device::Device(std::string mac, const DevAttr* devAttr):m_devAttr(devAttr)
 }
 
 
-bool Device::writeTo(const unsigned char* packet, int len, std::string& gwMac, std::string& key, void  * miGateway)
+
+bool  Device::writeTo(const WriteMsg& msg)
 {
-		
+	int type = msg.type;
+	int subtype = msg.subType;
+	int unit = msg.unit;
+	int len = msg.len;
+	const unsigned char* packet = msg.packet;
+	void* miGateway = msg.miGateway;
+	std::string key = msg.key;
+	std::string wgMac = msg.wgMac;
+
+	
+	bool res = false;
+	auto Outlet = m_devAttr->getOutlet();
+	for (const auto & itt : Outlet)
+	{
+		if (itt->match(type, subtype, unit) == true)
+		{
+			std::string mac = m_devID.getMac();
+			std::string model = m_devAttr->getZigbeeModel();
+
+			res = itt->writeTo(packet, len, mac, model, key, wgMac, miGateway);
+			break;
+		}
+	}
+	return res;
+
+
+}
+
+
+#if 0
+bool Device::writeTo(const unsigned char* packet, int len, int type, int subType, void  * miGateway, std::string& key, std::string gwMac)
+{
+	auto outlet = getOutlet();
 	int type = pTypeGeneralSwitch;
 	int subtype= sSwitchGeneralSwitch;
 	int uint = 1;
 
-
+	bool res = false;
 	auto Outlet = m_devAttr->getOutlet();
 	for (const auto & itt : Outlet)
 	{
@@ -68,25 +105,25 @@ bool Device::writeTo(const unsigned char* packet, int len, std::string& gwMac, s
 			std::string mac = m_devID.getMac();
 			std::string model = m_devAttr->getZigbeeModel();
 
-			itt->writeTo(packet, len, mac, model, key, gwMac, miGateway);
+			res = itt->writeTo(packet, len, mac, model, key, gwMac, miGateway);
 			break;
 		}
 	}
-	return true;
+	return res;
 }
 
-
+#endif
 
 
 bool Device::recvFrom(std::string& msg, void *miGateway)
 {
-
+	bool res = false;
 	auto Outlet = m_devAttr->getOutlet();
 	for (const auto & itt : Outlet)
 	{
-		itt->recvFrom(msg, miGateway);
+		res = itt->recvFrom(msg, miGateway);
 	}
-	return true;
+	return res;
 }
 
 
@@ -104,6 +141,6 @@ bool Device::match(unsigned int ssid, int type, int subType, int unit) const
 
 
 
-
+}
 
 

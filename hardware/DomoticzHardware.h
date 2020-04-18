@@ -3,6 +3,8 @@
 #include <boost/signals2.hpp>
 #include "../main/RFXNames.h"
 #include "../main/StoppableTask.h"
+#include "hardwaretypes.h"
+
 // type support
 #include "../cereal/types/string.hpp"
 #include "../cereal/types/memory.hpp"
@@ -95,7 +97,7 @@ protected:
 	void SendSwitch(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const bool bOn, const double Level, const std::string &defaultname, const int RssiLevel = 12);
 	void SendSwitchIfNotExists(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const bool bOn, const double Level, const std::string &defaultname);
 	void SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const uint8_t mode , const int value, const int brightness, const int cmd, const int BatteryLevel, const std::string& defaultname);
-
+	void SendRGBWSwitch(const int NodeID, const uint8_t Unit, const int OnOff, const int Level, const _tColor color, const int BatteryLevel);
 	void SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const int Level, const bool bIsRGBW, const std::string &defaultname);
 	void SendGeneralSwitch(const int NodeID, const int ChildID, const int BatteryLevel, const uint8_t SwitchState, const uint8_t Level, const std::string &defaultname, const int RssiLevel = 12);
 	void SendVoltageSensor(const int NodeID, const uint32_t ChildID, const int BatteryLevel, const float Volt, const std::string &defaultname);

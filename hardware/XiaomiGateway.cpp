@@ -844,20 +844,29 @@ int XiaomiGateway::WriteToGeneralSwitch(const tRBUF *pCmd, int length, Json::Val
 		return -1;
 	}
 	int ret = -1;
-	
+
 	_tGeneralSwitch *xcmd = (_tGeneralSwitch*)pCmd;
 	std::string key= "xxx";
 
 	unsigned int ssid = xcmd->id;
 	unsigned char unit = xcmd->unitcode;
-	
+	WriteMsg msg;
+	msg.packet = reinterpret_cast<const unsigned char*>(pCmd);
+	msg.len = length;
+	msg.type = packettype;
+	msg.subType = subtype;
+	msg.unit =unit;
+	msg.wgMac = m_GatewaySID;
+	msg.key = "xxxx";
+	msg.miGateway = static_cast<void*>(this);
+
 	std::shared_ptr <Device> dev = 	XiaomiGateway::getDevice(ssid, 
 									static_cast<int>(packettype), 
 									static_cast<int>(subtype), 
 									static_cast<int>(unit));
 	if (dev)
 	{
-		bool res = dev->writeTo(reinterpret_cast<const unsigned char*>(pCmd), length, m_GatewaySID, key, static_cast<void*>(this));
+		bool res = dev->writeTo(msg);
 		if (res)
 		{
 			ret = 0;
@@ -869,12 +878,51 @@ int XiaomiGateway::WriteToGeneralSwitch(const tRBUF *pCmd, int length, Json::Val
 
 int XiaomiGateway::WriteToColorSwitch(const tRBUF *pCmd,  int length, Json::Value& json)
 {
+	std::cout<<"-----------WriteToColorSwitch----1---"<<std::endl;
 	unsigned char packettype = pCmd->ICMND.packettype;
 	unsigned char subtype = pCmd->ICMND.subtype;
 	if (packettype != pTypeColorSwitch){
+		std::cout<<"-----------WriteToColorSwitch--2----"<<std::endl;
 		return -1;
 	}
 
+	int ret = -1;
+
+	const _tColorSwitch *xcmd = reinterpret_cast<const _tColorSwitch*>(pCmd);
+	std::string key= "xxx";
+
+	unsigned int ssid = xcmd->id;
+	unsigned char unit = xcmd->dunit;
+	
+	std::shared_ptr <Device> dev = 	XiaomiGateway::getDevice(ssid, 
+									static_cast<int>(packettype), 
+									static_cast<int>(subtype), 
+								static_cast<int>(unit));
+
+	std::cout<<"-----------WriteToColorSwitch--3----"<<std::endl;
+	if (dev)
+	{
+		WriteMsg msg;
+		msg.packet = reinterpret_cast<const unsigned char*>(pCmd);
+		msg.len = length;
+		msg.type = packettype;
+		msg.subType = subtype;
+		msg.unit =unit;
+		msg.wgMac = m_GatewaySID;
+		msg.key = "xxxx";
+		msg.miGateway = static_cast<void*>(this);
+		bool res = dev->writeTo(msg);
+		if (res)
+		{
+			ret = 0;
+		}
+	}
+	std::cout<<"-----------WriteToColorSwitch--4----:"<<ret<<std::endl;
+
+	return ret;
+
+
+#if 0
 	const _tColorSwitch *xcmd = reinterpret_cast<const _tColorSwitch*>(pCmd);
 	std::string channel= "xxx";
 	std::string commmand= "xxx";
@@ -1003,6 +1051,7 @@ int XiaomiGateway::WriteToColorSwitch(const tRBUF *pCmd,  int length, Json::Valu
 		_log.Log(LOG_ERROR, "XiaomiGateway: Unknown command %d", xcmd->command);
 	}
 	return -1;
+#endif
 }
 
 
@@ -1087,8 +1136,10 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 	/* parse cmd failed or not support cmd */
 	else if (-1 == ret)
 	{
+		_log.Log(LOG_ERROR, "WriteToHardware ret == -1");
 		return false;
 	}
+	std::cout<<"-----------WriteToHardware--4----:"<<ret<<std::endl;
 
 	if (!message.empty()) {
 		_log.Debug(DEBUG_HARDWARE, "XiaomiGateway: message: '%s'", message.c_str());
@@ -1195,14 +1246,16 @@ void XiaomiGateway::InsertUpdateTempHumPressure(const std::string &nodeid, const
 
 	if (Temperature == "" || Humidity == "" || Pressure == "")
 	{
-		std::string devid = GetDeviceId(nodeid);
+		auto ssid = WeatherOutlet::idConvert(nodeid);
 		std::string svalue = "";
 		int type    = pTypeTEMP_HUM_BARO;
 		int subtype = sTypeTHB1;
 		int nvalue  = 0;
 		struct tm updatetime;
 
-		res = m_sql.GetLastValue(m_HwdID, devid.c_str(), 1, type, subtype, nvalue, svalue, updatetime);
+		std::cout<<"ssid.first"<<ssid.first<<"ssid.second"<<ssid.second<<std::endl;
+
+		res = m_sql.GetLastValue(m_HwdID, ssid.second.c_str(), 1, type, subtype, nvalue, svalue, updatetime);
 		if(false == res)
 		{
 			_log.Log(LOG_ERROR, "get TempHumPressure svalue failed");
@@ -1258,14 +1311,16 @@ void XiaomiGateway::InsertUpdateTempHum(const std::string &nodeid, const std::st
 
 	if (Temperature == "" || Humidity == "")
 	{
-		std::string devid = GetDeviceId(nodeid);
+		auto ssid = WeatherOutlet::idConvert(nodeid);
 		std::string svalue = "";
 		int type    = pTypeTEMP_HUM;
 		int subtype = sTypeTH5;
 		int nvalue  = 0;
 		struct tm updatetime;
 
-		res = m_sql.GetLastValue(m_HwdID, devid.c_str(), 1, type, subtype, nvalue, svalue, updatetime);
+		std::cout<<"ssid.first"<<ssid.first<<"ssid.second"<<ssid.second<<std::endl;
+
+		res = m_sql.GetLastValue(m_HwdID, ssid.second.c_str(), 1, type, subtype, nvalue, svalue, updatetime);
 		if(false == res)
 		{
 			_log.Log(LOG_ERROR, "get TempHumPressure svalue failed");
@@ -1292,6 +1347,49 @@ void XiaomiGateway::InsertUpdateTempHum(const std::string &nodeid, const std::st
 		SendTempHumSensor(sID, battery, temp, hum, Name);
 	}
 }
+
+
+void XiaomiGateway::InsertUpdateRGBLight(const std::string & NodeID, unsigned char Unit, const int OnOff, const std::string& Brightness, const _tColor&  Color, const int battery)
+{
+	unsigned int sID = GetShortID(NodeID);
+	if (sID > 0)
+	{
+		int lastLevel = 0;
+		int nvalue = 0;
+		int bright = 0;
+
+		bright = atoi(Brightness.c_str());
+
+		std::cout<<"InsertUpdateRGBLight bright string:"<<Brightness<<"  bright:"<<bright<<std::endl;
+		std::cout<<"color json:"<<Color.toJSONString()<<std::endl;
+
+		std::vector<std::vector<std::string> > result;
+
+		auto ssid = LedOutlet::idConvert(NodeID);
+		result = m_sql.safe_query("SELECT nValue, LastLevel FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q') AND (Type==%d)", m_HwdID, ssid.second.c_str(), pTypeColorSwitch);
+		if (result.empty())
+		{
+			return;
+		}
+
+		
+		nvalue = atoi(result[0][0].c_str());
+		lastLevel = atoi(result[0][1].c_str());	
+		bright = (Brightness == "")? lastLevel : bright;
+
+		if (nvalue == gswitch_sOff)
+		{
+			_log.Log(LOG_ERROR, "led off , do not update all value");
+			return;
+		}
+		SendRGBWSwitch(sID, Unit, OnOff, bright, Color, battery);
+
+		std::cout<<"nvalue:"<<nvalue<<"	 lastlevel:"<<lastLevel<<"  bright:"<<bright<<std::endl;;
+	}
+
+	
+}
+
 
 void XiaomiGateway::InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const unsigned char Mode, const std::string& Color, const std::string& Brightness, const bool bIsWhite,  const int battery)
 {

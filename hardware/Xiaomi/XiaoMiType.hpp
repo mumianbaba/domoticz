@@ -5,7 +5,7 @@
 #include <boost/tuple/tuple.hpp>
 #include <initializer_list>
 #include <list>
-
+#include <functional>
 
 #include "../hardwaretypes.h"
 #include "../../main/RFXNames.h"
@@ -13,7 +13,15 @@
 
 
 typedef std::pair<unsigned int, std::string>   SsidPair;
-typedef boost::tuple<std::string  /* key */, std::string /* value */, bool> Rule_OnOff;
+typedef boost::tuple<std::string  /* key */, std::string /* value */, bool> RuleOnOff;
+typedef boost::tuple<std::string  /* key */, std::string /* value */, bool> RuleKwh;
+
+typedef boost::tuple<std::string  /* key */, std::string /* value */, int> RuleSelector;
+
+typedef boost::tuple<std::string  /* key */, std::string /* value */, int> RuleWeather;
+
+typedef boost::tuple<std::string  /* key */, std::string /* value */, int> RuleLed;
+
 
 
 

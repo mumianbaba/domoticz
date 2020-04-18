@@ -24,7 +24,7 @@ public:
 public:
 	virtual bool recvFrom(std::string& root, void * miGateway) const = 0;
 	virtual bool writeTo(const unsigned char* packet, int len, std::string& mac, std::string& model, std::string& gwMac, std::string& key, void * miGateway) const = 0;
-	virtual SsidPair idConverter(std::string& mac) const;
+	virtual SsidPair idConverter(const std::string& mac) const;
 
 public:
 	int getType() const {return m_type;}
@@ -39,9 +39,9 @@ public:
 
 	std::string getOpts() const {return m_opts;}
 
-	unsigned int macToUint(std::string& mac) const;	
-
 	bool match(int type, int subType, int unit) const;
+
+	static unsigned int macToUint(const std::string& mac);	
 
 protected:
 
@@ -56,26 +56,6 @@ private:
 };
 
 
-#if 0
-class OnOffOutlet : public OutletAttr
-{
-
-public:
-	OnOffOutlet(int unit, int dir, std::initializer_list<Rule_OnOff> list);
-
-public:
-	bool recvFrom(std::string& root, void * miGateway)  const override;
-
-	bool writeTo(const unsigned char* packet, int len, std::string& mac, std::string& model, std::string& gwMac, std::string& key, void * miGateway) const override;
-
-
-private:
-
-	std::vector<boost::tuple<std::string  /* key */, std::string /* value */, bool> > m_rule;
-
-};
-
-#endif
 }
 
 
