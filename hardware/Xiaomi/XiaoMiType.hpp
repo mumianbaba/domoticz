@@ -23,6 +23,7 @@ typedef boost::tuple<std::string  /* key */, std::string /* value */, int> RuleW
 typedef boost::tuple<std::string  /* key */, std::string /* value */, int> RuleLed;
 
 
+typedef boost::tuple<std::string  /* key */, std::string /* value */, int> RuleGW;
 
 
 

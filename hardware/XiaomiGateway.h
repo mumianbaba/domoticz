@@ -26,34 +26,15 @@ typedef std::map <std::string, std::shared_ptr<Device>> DeviceMap;
 
 #define MAX_LOG_LINE_LENGTH (2048*3)
 
-#define SP_MODLE  		0  //string
-#define SP_NAME   		1  //string
-#define SP_TYPE   		2  //int
-#define SP_SUBTYPE   	3  //int
-#define SP_SWTYPE   	4  //int
-#define SP_UINT   		5  //int
-#define SP_Outlet   	6  //int
-
-#define SP_OPT   		7  //string
-
-
-#define DY_SSID   		0
-#define DY_MODLE  		1
-#define DY_MAC   	 	2
-#define DY_DEVICEID  	3
-
-
 
 class XiaomiGateway : public CDomoticzHardwareBase
 {
 public:
 	explicit XiaomiGateway(const int ID);
 	~XiaomiGateway(void);
-	bool WriteToHardware(const char *pdata, const unsigned char length) override;
 
-	int	WriteToGeneralSwitch(const tRBUF *pCmd, int length,Json::Value& json);
-	int WriteToColorSwitch(const tRBUF *pCmd, int length, Json::Value& json);
-	int WriteToMannageDeive(const tRBUF *pCmd, int length, Json::Value& json);
+	bool WriteToHardware(const char *pdata, const unsigned char length) override;
+	bool createWriteParam(const char * pdata, int length, WriteParam& param, std::shared_ptr <Device>& dev);
 
 	int GetGatewayHardwareID(){ return m_HwdID; };
 	std::string GetGatewayIp(){ return m_GatewayIp; };
@@ -63,35 +44,15 @@ public:
 	void SetAsMainGateway(){ m_ListenPort9898 = true; };
 	void UnSetMainGateway(){ m_ListenPort9898 = false; };
 
-
-	void RegisterSupportDevice(const std::string & model, const std::string & name,
-											const int type, const int subtype, const int swtype, const int uint,
-											const int outlet, const std::string & devopt);
-	int GetUincastPort();
+	int  GetUincastPort();
 	void SetUincastPort(int port);
 
-	std::vector<std::vector<std::string>>  GetDeviceInfoByModel(const std::string & model);
-
-	int          GetSsidBySid(const int devType, const int subType, const int sID);
-	int          GetSsidBySid(const int devType, const int subType, const std::string& sid);
-	std::string  GetDeviceIdBySsid(const int devType, const int subType, unsigned int rowId);
-	unsigned int GetSsidByDeviceId(const int devType, const int subType, const std::string& deviceID);
-	bool 		 SetDeviceInfo(const std::string & mac, const std::string & model);
-	void 		 DelDeviceInfo(const int ssid);
-
-	std::string  GetDeviceMac(const int ssid);
-	std::string  GetDeviceModel(const int ssid);
-	std::string  GetDeviceModel(const std::string& mac);
-	int 		 GetDeviceSsid(const std::string& mac);
-	std::string  GetDeviceId(const std::string& mac);
-	std::string  GetDeviceId(const int ssid);
-	bool 		 IsDevInfoInited(){return m_bDevInfoInited;}
-	void 		 SetDevInfoInited(bool flag){m_bDevInfoInited=flag;}
-
+	bool IsDevInfoInited(){return m_bDevInfoInited;}
+	void SetDevInfoInited(bool flag){m_bDevInfoInited=flag;}
+	void deviceListHandler(Json::Value& root);
+	void joinGatewayHandler(Json::Value& root);
 
 	bool createDtDevice(std::shared_ptr<Device> dev);
-
-
 	static void initDeviceAttrMap(const DevInfo devInfo[], int size);
 	static void addDeviceToMap(std::string& mac, std::shared_ptr<Device> ptr);
 	static void delDeviceFromMap(std::string& mac);
@@ -106,7 +67,6 @@ private:
 	bool m_bDevInfoInited;
 	static AttrMap m_attrMap;
 	static DeviceMap m_deviceMap;
-
 
 public:
 	bool StartHardware() override;

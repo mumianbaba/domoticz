@@ -10,6 +10,8 @@
 
 namespace XiaoMi{
 
+static const TbGateway tenbayGW {};
+
 
 static const OnOffOutlet onoff0{ 1, 3, {{"channel_0", "on", true}, {"channel_0", "off", false}}};
 static const OnOffOutlet onoff1{ 2, 3, {{"channel_1", "on", true}, {"channel_1", "off", false}}};
@@ -188,6 +190,14 @@ static const LedOutlet ledTemp
 
 
 static const DevInfo  devInfoTab[] {
+	/**/
+	{
+		name : "Tenbay Gateway",
+		zigbeeModel : "TBL-V01-GL",
+		model : "xxxxx",
+		vendor : "tenbay",
+		outlet : {&tenbayGW}
+	},
 	/* onoff */
 	{
 		name : "Aqara Wall Dual Switch",

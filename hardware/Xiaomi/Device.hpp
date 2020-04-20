@@ -17,20 +17,6 @@ namespace XiaoMi{
 
 
 
-
-struct WriteMsg{
-	const unsigned char* packet;
-	int len;
-	int type;
-	int subType;
-	int unit;
-	std::string wgMac;
-	std::string key;
-	void  * miGateway;
-};
-
-
-
 class DevID
 {
 
@@ -65,11 +51,11 @@ class Device
 		Device( std::string mac, const DevAttr* devAttr);
 		~Device() {std::cout<< "~Device"<<std::endl;}
 	public:
-		virtual bool recvFrom(std::string& msg, void *miGateway);
+		virtual bool recvFrom(ReadParam& param);
 	
 		//virtual bool writeTo(const unsigned char* packet, int len, int type, int subType, void	* miGateway, std::string& key, std::string gwMac);
 		
-		virtual bool writeTo(const WriteMsg& msg);
+		virtual bool writeTo(WriteParam& param);
 
 	public:
 		friend std::ostream & operator << (std::ostream& out, Device& device);

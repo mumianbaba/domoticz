@@ -22,9 +22,9 @@ public:
 	OnOffOutlet(int unit, int dir, std::initializer_list<RuleOnOff> list);
 
 public:
-	bool recvFrom(std::string& root, void * miGateway)  const override;
+	bool recvFrom(const ReadParam&  param)  const override;
 
-	bool writeTo(const unsigned char* packet, int len, std::string& mac, std::string& model, std::string& gwMac, std::string& key, void * miGateway) const override;
+	bool writeTo(const WriteParam& param) const override;
 
 
 private:
@@ -41,9 +41,9 @@ public:
 	SensorBinOutlet(int unit, int swType, int dir, std::initializer_list<RuleOnOff> list);
 
 public:
-	bool recvFrom(std::string& root, void * miGateway)  const override;
+	bool recvFrom(const ReadParam&  param)  const override;
 
-	bool writeTo(const unsigned char* packet, int len, std::string& mac, std::string& model, std::string& gwMac, std::string& key, void * miGateway) const override;
+	bool writeTo(const WriteParam& param) const override;
 
 
 private:
@@ -59,9 +59,9 @@ public:
 	KwhOutlet(int unit, int dir, std::initializer_list<RuleOnOff> list);
 
 public:
-	bool recvFrom(std::string& root, void * miGateway)  const override;
+	bool recvFrom(const ReadParam&  param)  const override;
 
-	bool writeTo(const unsigned char* packet, int len, std::string& mac, std::string& model, std::string& gwMac, std::string& key, void * miGateway) const override;
+	bool writeTo(const WriteParam& param) const override;
 
 
 private:
@@ -78,9 +78,9 @@ public:
 	SelectorOutlet(int unit, int dir, std::string opts, std::initializer_list<RuleSelector> list);
 
 public:
-	bool recvFrom(std::string& root, void * miGateway)  const override;
+	bool recvFrom(const ReadParam&  param)  const override;
 
-	bool writeTo(const unsigned char* packet, int len, std::string& mac, std::string& model, std::string& gwMac, std::string& key, void * miGateway) const override;
+	bool writeTo(const WriteParam& param) const override;
 
 
 private:
@@ -108,9 +108,9 @@ public:
 	WeatherOutlet(int unit, int dir, WeatherType type, std::initializer_list<RuleWeather> list);
 
 public:
-	bool recvFrom(std::string& root, void * miGateway)  const override;
+	bool recvFrom(const ReadParam&  param)  const override;
 
-	bool writeTo(const unsigned char* packet, int len, std::string& mac, std::string& model, std::string& gwMac, std::string& key, void * miGateway) const override;
+	bool writeTo(const WriteParam& param) const override;
 
 	SsidPair idConverter(const std::string& mac) const override;
 
@@ -144,9 +144,9 @@ public:
 	LedOutlet(int unit, int dir, LedType type, std::initializer_list<RuleLed> list);
 
 public:
-	bool recvFrom(std::string& root, void * miGateway)  const override;
+	bool recvFrom(const ReadParam&  param)  const override;
 
-	bool writeTo(const unsigned char* packet, int len, std::string& mac, std::string& model, std::string& gwMac, std::string& key, void * miGateway) const override;
+	bool writeTo(const WriteParam& param) const override;
 
 public:
 
@@ -162,6 +162,28 @@ private:
 
 };
 
+
+
+class TbGateway : public OutletAttr
+{
+
+public:
+	TbGateway(std::initializer_list<RuleGW> list);
+
+
+public:
+	bool recvFrom(const ReadParam&  param)  const override;
+
+	bool writeTo(const WriteParam& param) const override;
+
+public:
+	static SsidPair idConvert(const std::string& mac);
+
+private:
+
+	std::vector<boost::tuple<std::string  /* key */, std::string /* value */,  int>> m_rule;
+
+};
 
 
 }

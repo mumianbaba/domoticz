@@ -57,18 +57,15 @@ Device::Device(std::string mac, const DevAttr* devAttr):m_devAttr(devAttr)
 
 
 
-bool  Device::writeTo(const WriteMsg& msg)
+bool  Device::writeTo(WriteParam& param)
 {
-	int type = msg.type;
-	int subtype = msg.subType;
-	int unit = msg.unit;
-	int len = msg.len;
-	const unsigned char* packet = msg.packet;
-	void* miGateway = msg.miGateway;
-	std::string key = msg.key;
-	std::string wgMac = msg.wgMac;
+	int type = param.type;
+	int subtype = param.subType;
+	int unit = param.unit;
 
-	
+	param.mac = getMac();
+	param.model = getModel();
+
 	bool res = false;
 	auto Outlet = m_devAttr->getOutlet();
 	for (const auto & itt : Outlet)
@@ -77,14 +74,12 @@ bool  Device::writeTo(const WriteMsg& msg)
 		{
 			std::string mac = m_devID.getMac();
 			std::string model = m_devAttr->getZigbeeModel();
-
-			res = itt->writeTo(packet, len, mac, model, key, wgMac, miGateway);
+			
+			res = itt->writeTo(param);
 			break;
 		}
 	}
 	return res;
-
-
 }
 
 
@@ -115,13 +110,13 @@ bool Device::writeTo(const unsigned char* packet, int len, int type, int subType
 #endif
 
 
-bool Device::recvFrom(std::string& msg, void *miGateway)
+bool Device::recvFrom(ReadParam& param)
 {
 	bool res = false;
 	auto Outlet = m_devAttr->getOutlet();
 	for (const auto & itt : Outlet)
 	{
-		res = itt->recvFrom(msg, miGateway);
+		res = itt->recvFrom(param);
 	}
 	return res;
 }

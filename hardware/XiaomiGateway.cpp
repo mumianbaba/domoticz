@@ -8,6 +8,7 @@
 #include "../main/WebServer.h"
 #include "../webserver/cWebem.h"
 #include "../main/json_helper.h"
+#include "../main/RFXtrx.h"
 #include "XiaomiGateway.h"
 #include <openssl/aes.h>
 #include <boost/asio.hpp>
@@ -34,6 +35,9 @@ competitive prices.
 Protocol is Zigbee and WiFi, and the gateway and
 Domoticz need to be in the same network/subnet with multicast working
 */
+
+#define round(a) ( int ) ( a + .5 )
+
 
 namespace XiaoMi{
 
@@ -72,200 +76,10 @@ using namespace XiaoMi;
 
  AttrMap XiaomiGateway::m_attrMap;
  DeviceMap XiaomiGateway::m_deviceMap;
+ 
+ std::list<XiaomiGateway*> gatewaylist;
+ std::mutex gatewaylist_mutex;
 
- std::vector<boost::tuple<std::string, std::string, int, int, int, int, int, std::string> >  XiaomiGateway::m_SpDevice;
-
-
-/*
-	Ssid (short short id) 是为满足各种消息格式后，最终生成DeviceID(存在数据库，并在UI上展示)的id。
-	例如sid 1234567890123456   --> short id -->90123456-->适配消息格式--->3456(温度传感器)--->(数据库)idx + "3456"+ DeviceType+DeviceSubType
-	该函数将SsID转换成DeciceID，这里的DeciceID并不是数据库的主键，数据库的主键为ID，在api中为idx，从1开始依次递增。
-*/
-std::string XiaomiGateway::GetDeviceIdBySsid(const int devType, const int subType, unsigned int rowId)
-{
-
-	char szTmp[64];
-	std::string DeviceId = "";
-
-	memset(szTmp, 0, sizeof(szTmp));
-
-	switch (devType)
-	{
-		case pTypeRAIN:
-		case pTypeWIND:
-		case pTypeTEMP:
-		case pTypeHUM:
-		case pTypeTEMP_HUM:
-		case pTypeTEMP_HUM_BARO:
-		case pTypeTEMP_BARO:
-		case pTypeTEMP_RAIN:
-		case pTypeUV:
-		case pTypePOWER:
-		{
-			sprintf(szTmp, "%d", rowId);
-		}
-		break;
-
-
-		case pTypeColorSwitch:
-		case pTypeGeneralSwitch:
-		{
-			sprintf(szTmp, "%08X", rowId);
-		}
-		break;
-
-		case pTypeGeneral:
-		{
-			if (
-				(subType == sTypeVoltage) ||
-				(subType == sTypeCurrent) ||
-				(subType == sTypePercentage) ||
-				(subType == sTypeWaterflow) ||
-				(subType == sTypePressure) ||
-				(subType == sTypeZWaveClock) ||
-				(subType == sTypeZWaveThermostatMode) ||
-				(subType == sTypeZWaveThermostatFanMode) ||
-				(subType == sTypeZWaveThermostatOperatingState) ||
-				(subType == sTypeFan) ||
-				(subType == sTypeTextStatus) ||
-				(subType == sTypeSoundLevel) ||
-				(subType == sTypeBaro) ||
-				(subType == sTypeDistance) ||
-				(subType == sTypeSoilMoisture) ||
-				(subType == sTypeCustom) ||
-				(subType == sTypeKwh) ||
-				(subType == sTypeZWaveAlarm)
-				)
-			{
-				sprintf(szTmp, "%08X", rowId);
-			}
-			else
-			{
-				sprintf(szTmp, "%d", rowId);
-			}
-		}
-		break;
-
-
-		case pTypeHomeConfort:
-		{
-			unsigned char id1 = rowId;
-			unsigned char id2 = rowId;
-			unsigned char id3 = rowId;
-			unsigned char id4 = rowId;
-
-			sprintf(szTmp, "%02X%02X%02X%02X", id1, id2,id3, id4);
-		}
-		break;
-
-		case pTypeUsage:
-		case pTypeLux:
-		{
-			unsigned char id1 = (unsigned char)((rowId & 0xFF000000) >> 24);
-			unsigned char id2 = (unsigned char)((rowId & 0xFF000000) >> 16);
-			unsigned char id3 = (unsigned char)((rowId & 0xFF000000) >> 8);
-			unsigned char id4 = (unsigned char)(rowId & 0xff);
-
-			sprintf(szTmp, "%X%02X%02X%02X", id1, id2, id3, id4);
-		}
-		break;
-
-
-		case pTypeWEATHER:
-		{
-			unsigned char id1 = 0;
-			unsigned char id2 = 0;
-			unsigned char id3 = 0;
-			unsigned char id4 = (unsigned char)(rowId & 0xff);
-
-			sprintf(szTmp, "%X%02X%02X%02X", id1, id2, id3, id4);
-		}
-		break;
-			_log.Log(LOG_ERROR, "GetDeviceIdBySsid unkown device type:%d subtype:%d\n", devType, subType);
-		default:
-		break;
-	}
-	DeviceId = szTmp;
-	return DeviceId;
-}
-
-unsigned int XiaomiGateway::GetSsidByDeviceId(const int devType, const int subType, const std::string& deviceID)
-{
-	unsigned int ssid = 0;
-
-	switch (devType)
-	{
-		case pTypeRAIN:
-		case pTypeWIND:
-		case pTypeTEMP:
-		case pTypeHUM:
-		case pTypeTEMP_HUM:
-		case pTypeTEMP_HUM_BARO:
-		case pTypeTEMP_BARO:
-		case pTypeTEMP_RAIN:
-		case pTypeUV:
-		case pTypePOWER:
-		{
-			ssid = static_cast<unsigned int>(std::stoul(deviceID, 0, 10));
-		}
-		break;
-
-
-		case pTypeColorSwitch:
-		case pTypeGeneralSwitch:
-		{
-			ssid = static_cast<unsigned int>(std::stoul(deviceID, 0, 16));
-		}
-		break;
-
-		case pTypeGeneral:
-		{
-			if (
-				(subType == sTypeVoltage) ||
-				(subType == sTypeCurrent) ||
-				(subType == sTypePercentage) ||
-				(subType == sTypeWaterflow) ||
-				(subType == sTypePressure) ||
-				(subType == sTypeZWaveClock) ||
-				(subType == sTypeZWaveThermostatMode) ||
-				(subType == sTypeZWaveThermostatFanMode) ||
-				(subType == sTypeZWaveThermostatOperatingState) ||
-				(subType == sTypeFan) ||
-				(subType == sTypeTextStatus) ||
-				(subType == sTypeSoundLevel) ||
-				(subType == sTypeBaro) ||
-				(subType == sTypeDistance) ||
-				(subType == sTypeSoilMoisture) ||
-				(subType == sTypeCustom) ||
-				(subType == sTypeKwh) ||
-				(subType == sTypeZWaveAlarm)
-				)
-			{
-				ssid = static_cast<unsigned int>(std::stoul(deviceID, 0, 16));
-			}
-			else
-			{
-				ssid = static_cast<unsigned int>(std::stoul(deviceID, 0, 10));
-			}
-		}
-		break;
-
-
-		case pTypeHomeConfort:
-		case pTypeUsage:
-		case pTypeLux:
-		case pTypeWEATHER:
-		{
-			ssid = static_cast<unsigned int>(std::stoul(deviceID, 0, 16));
-		}
-		break;
-
-		default:
-			_log.Log(LOG_ERROR, "GetSsidByDeviceId unkown device type:%d subtype:%d\n", devType, subType);
-		break;
-	}
-	return ssid;
-}
 
 
 int XiaomiGateway::GetUincastPort()
@@ -277,320 +91,6 @@ void XiaomiGateway::SetUincastPort(int port)
 {
 	m_GatewayUPort = port;
 }
-
-/*
-	return : short short id for cmd struct
-*/
-int XiaomiGateway::GetSsidBySid(const int devType, const int subType, const std::string& sid)
-{
-	int sID = GetShortID(sid);
-	return GetSsidBySid(devType, subType, sID);
-}
-int XiaomiGateway::GetSsidBySid(const int devType, const int subType, const int sID)
-{
-	int sSID = sID;
-
-	switch (devType)
-	{
-		case pTypeRAIN:
-		case pTypeWIND:
-		case pTypeTEMP:
-		case pTypeHUM:
-		case pTypeTEMP_HUM:
-		case pTypeTEMP_HUM_BARO:
-		case pTypeTEMP_BARO:
-		case pTypeTEMP_RAIN:
-		case pTypeUV:
-		case pTypeFS20:
-		case pTypeWEATHER:
-		case pTypePOWER:
-		{
-			return sID & 0xffff;
-		}
-		break;
-
-		case pTypeColorSwitch:
-		case pTypeGeneralSwitch:
-		{
-			return sID & 0xffffffff;
-		}
-		break;
-
-		case pTypeGeneral:
-		{
-			if (
-				(subType == sTypeVoltage) ||
-				(subType == sTypeCurrent) ||
-				(subType == sTypePercentage) ||
-				(subType == sTypeWaterflow) ||
-				(subType == sTypePressure) ||
-				(subType == sTypeZWaveClock) ||
-				(subType == sTypeZWaveThermostatMode) ||
-				(subType == sTypeZWaveThermostatFanMode) ||
-				(subType == sTypeZWaveThermostatOperatingState) ||
-				(subType == sTypeFan) ||
-				(subType == sTypeTextStatus) ||
-				(subType == sTypeSoundLevel) ||
-				(subType == sTypeBaro) ||
-				(subType == sTypeDistance) ||
-				(subType == sTypeSoilMoisture) ||
-				(subType == sTypeCustom) ||
-				(subType == sTypeKwh) ||
-				(subType == sTypeZWaveAlarm)
-				)
-			{
-				return sID & 0xffffffff;
-			}
-			else
-			{
-				return sID & 0xfffff;
-			}
-		}
-		break;
-
-
-		case pTypeHomeConfort:
-		{
-			return sID & 0xffffffff;
-		}
-		break;
-
-		case pTypeUsage:
-		case pTypeLux:
-		{
-			return sID & 0xffffffff;
-		}
-		break;
-
-		default:
-
-		break;
-	}
-
-	return sSID;
-}
-
-std::vector<std::vector<std::string>>  XiaomiGateway::GetDeviceInfoByModel(const std::string & model)
-{
-	std::vector<std::vector<std::string>> result;
-	std::string name = "";
-	int devType = 0;
-	int subType = 0;
-	int swType = 0;
-	int uint = 0;
-	int outlet = 0;
-	std::string opt = "";
-
-	bool found = false;
-	for (unsigned i = 0; i < m_SpDevice.size(); i++) {
-		if (boost::get<SP_MODLE>(m_SpDevice[i]) == model) {
-			name = boost::get<SP_NAME>(m_SpDevice[i]);
-			devType = boost::get<SP_TYPE>(m_SpDevice[i]);
-			subType = boost::get<SP_SUBTYPE>(m_SpDevice[i]);
-			swType = boost::get<SP_SWTYPE>(m_SpDevice[i]);
-			uint = boost::get<SP_UINT>(m_SpDevice[i]);
-			outlet = boost::get<SP_Outlet>(m_SpDevice[i]);
-			opt = boost::get<SP_OPT>(m_SpDevice[i]);
-			std::vector<std::string> values;
-
-			values.push_back(name);
-			values.push_back(std::to_string(devType));
-			values.push_back(std::to_string(subType));
-			values.push_back(std::to_string(swType));
-			values.push_back(std::to_string(uint));
-			values.push_back(std::to_string(outlet));
-			values.push_back(opt);
-
-			result.push_back(values);
-			found = true;
-		}
-	}
-	if (!found)
-	{
-		_log.Log(LOG_ERROR, "XiaomiGateway: GetDeviceInfoByModel not find model:%s", model.c_str());
-	}
-	return result;
-}
-
-
-void XiaomiGateway::DelDeviceInfo(const int ssid)
-{
-	bool found = false;
-	std::unique_lock<std::mutex> lock(m_mutex);
-	for (auto it = m_DevInfo.begin() ; it != m_DevInfo.end(); )
-	{
-		if (boost::get<DY_SSID>(*it) == ssid)
-		{
-			std::string model = boost::get<DY_MODLE>(*it);
-			std::string mac = boost::get<DY_MAC>(*it);
-			_log.Log(LOG_STATUS, "XiaomiGateway: DelDeviceInfo ssid:%d  model:%s mac:%s", ssid, model.c_str(), mac.c_str());
-			it = m_DevInfo.erase(it);
-		}
-		else
-		{
-			it++;
-		}
-	}
-}
-
-bool XiaomiGateway::SetDeviceInfo(const std::string & mac, const std::string & model)
-{
-	std::unique_lock<std::mutex> lock(m_mutex);
-	for (unsigned i = 0; i < m_DevInfo.size(); i++) {
-		if (boost::get<DY_MAC>(m_DevInfo[i]) == mac) {
-			boost::get<DY_MODLE>(m_DevInfo[i]) = model;
-			_log.Log(LOG_STATUS, "SetDeviceInfo update the model %s", model.c_str());
-			return true;
-		}
-	}
-
-
-	int type = 0;
-	int subtype = 0;
-	std::string devid = "";
-	std::vector<std::vector<std::string>> result;
-
-	result = GetDeviceInfoByModel(model);
-	if (result.empty())
-	{
-		_log.Log(LOG_ERROR, "SetDeviceInfo no support the model %s", model.c_str());
-		return false;
-	}
-	type = atoi(result[0][1].c_str());
-	subtype = atoi(result[0][2].c_str());
-
-	int ssid = GetSsidBySid(type, subtype, mac);
-	devid = GetDeviceIdBySsid(type, subtype, ssid);
-	m_DevInfo.push_back(boost::make_tuple(ssid, model, mac, devid));
-
-	return true;
-}
-
-
-/* 0:ssid  1:model  2:mac */
-std::string XiaomiGateway::GetDeviceMac(const int ssid)
-{
-	bool found = false;
-	std::string mac = "";
-	std::unique_lock<std::mutex> lock(m_mutex);
-	for (unsigned i = 0; i < m_DevInfo.size(); i++) {
-		if (boost::get<DY_SSID>(m_DevInfo[i]) == ssid) {
-			mac = boost::get<DY_MAC>(m_DevInfo[i]);
-			found = true;
-		}
-	}
-	if (!found)
-	{
-		_log.Log(LOG_ERROR, "XiaomiGateway: GetDeviceMac not find ssid:%d\n", ssid);
-	}
-	return mac;
-}
-
-/* 0:ssid  1:model  2:mac 3:devid */
-std::string XiaomiGateway::GetDeviceModel(const int ssid)
-{
-	bool found = false;
-	std::string model = "";
-	std::unique_lock<std::mutex> lock(m_mutex);
-	for (unsigned i = 0; i < m_DevInfo.size(); i++) {
-		if (boost::get<DY_SSID>(m_DevInfo[i]) == ssid) {
-			model = boost::get<DY_MODLE>(m_DevInfo[i]);
-			found = true;
-		}
-	}
-	if (!found)
-	{
-		_log.Log(LOG_ERROR, "XiaomiGateway: GetDeviceMac not find model ssid:%d\n", ssid);
-	}
-	return model;
-}
-
-
-/* 0:ssid  1:model  2:mac 3:devid */
-std::string XiaomiGateway::GetDeviceModel(const std::string& mac)
-{
-	bool found = false;
-	std::string model = "";
-	std::unique_lock<std::mutex> lock(m_mutex);
-	for (unsigned i = 0; i < m_DevInfo.size(); i++) {
-		if (boost::get<DY_MAC>(m_DevInfo[i]) == mac) {
-			model = boost::get<DY_MODLE>(m_DevInfo[i]);
-			found = true;
-		}
-	}
-	if (!found)
-	{
-		_log.Log(LOG_STATUS, "XiaomiGateway: GetDeviceMac not find model mac:%s\n", mac.c_str());
-	}
-	return model;
-}
-
-/* 0:ssid  1:model  2:mac 3:devid */
-int XiaomiGateway::GetDeviceSsid(const std::string& mac)
-{
-	bool found = false;
-	int ssid = 0;
-	std::unique_lock<std::mutex> lock(m_mutex);
-	for (unsigned i = 0; i < m_DevInfo.size(); i++) {
-		if (boost::get<DY_MAC>(m_DevInfo[i]) == mac) {
-			ssid  = boost::get<DY_SSID>(m_DevInfo[i]);
-			found = true;
-		}
-	}
-	if (!found)
-	{
-		_log.Log(LOG_STATUS, "XiaomiGateway: GetDeviceMac not find ssid mac:%s\n", mac.c_str());
-	}
-	return ssid;
-}
-
-/* 0:ssid  1:model  2:mac 3:devid */
-std::string XiaomiGateway::GetDeviceId(const std::string& mac)
-{
-	bool found = false;
-	std::string devid  = "";
-	std::unique_lock<std::mutex> lock(m_mutex);
-	for (unsigned i = 0; i < m_DevInfo.size(); i++) {
-		if (boost::get<DY_MAC>(m_DevInfo[i]) == mac) {
-			devid  = boost::get<DY_DEVICEID>(m_DevInfo[i]);
-			found = true;
-		}
-	}
-	if (!found)
-	{
-		_log.Log(LOG_STATUS, "XiaomiGateway: GetDeviceId not find mac:%s\n", mac.c_str());
-	}
-	return devid;
-}
-
-
-/* 0:ssid  1:model  2:mac 3:devid */
-std::string XiaomiGateway::GetDeviceId(const int ssid)
-{
-	bool found = false;
-	std::string devid  = "";
-	std::unique_lock<std::mutex> lock(m_mutex);
-	for (unsigned i = 0; i < m_DevInfo.size(); i++) {
-		if (boost::get<DY_SSID>(m_DevInfo[i]) == ssid) {
-			devid  = boost::get<DY_DEVICEID>(m_DevInfo[i]);
-			found = true;
-		}
-	}
-	if (!found)
-	{
-		_log.Log(LOG_STATUS, "XiaomiGateway: GetDeviceId not find ssid:%d\n", ssid);
-	}
-	return devid;
-}
-
-
-
-#define round(a) ( int ) ( a + .5 )
-// Removing this vector and use unitcode to tell what kind of device each is
-//std::vector<std::string> arrAqara_Wired_ID;
-
-std::list<XiaomiGateway*> gatewaylist;
-std::mutex gatewaylist_mutex;
 
 XiaomiGateway * XiaomiGateway::GatewayByIp(std::string ip)
 {
@@ -606,7 +106,7 @@ XiaomiGateway * XiaomiGateway::GatewayByIp(std::string ip)
 				ret = (*it);
 				break;
 			}
-		};
+		}
 	}
 	return ret;
 }
@@ -634,7 +134,6 @@ void XiaomiGateway::AddGatewayToList()
 		{
 			maingw->UnSetMainGateway();
 		}
-
 		gatewaylist.push_back(this);
 	}
 
@@ -731,16 +230,6 @@ int XiaomiGateway::get_local_ipaddr(std::vector<std::string>& ip_addrs)
 #endif
 }
 
-void XiaomiGateway::RegisterSupportDevice(const std::string & model, const std::string & name,
-											const int type, const int subtype, const int swtype, const int uint,
-											const int outlet, const std::string & devopt)
-{
-	m_SpDevice.push_back(boost::make_tuple(model, name, type, subtype, swtype, uint, outlet, devopt));
-
-}
-
-
-
 void XiaomiGateway::initDeviceAttrMap(const DevInfo devInfo[], int size)
 {
 	int ii;
@@ -755,8 +244,7 @@ void XiaomiGateway::initDeviceAttrMap(const DevInfo devInfo[], int size)
 	}
 	return;
 }
-
-											
+									
 const DevAttr* XiaomiGateway::findDevAttr(std::string& model)
 {
 	auto it = m_attrMap.find(model);
@@ -767,7 +255,6 @@ const DevAttr* XiaomiGateway::findDevAttr(std::string& model)
 	}
 	return it->second;
 }
-
 
 void XiaomiGateway::addDeviceToMap(std::string& mac, std::shared_ptr<Device> ptr)
 {
@@ -780,7 +267,6 @@ void XiaomiGateway::delDeviceFromMap(std::string& mac)
 	m_deviceMap.erase(mac);
 	std::cout<<"delDeviceFromMap mac:"<<mac<<std::endl;
 }
-
 
 std::shared_ptr<Device> XiaomiGateway::getDevice(std::string& mac)
 {
@@ -815,7 +301,6 @@ std::shared_ptr<Device> XiaomiGateway::getDevice(unsigned int ssid, int type, in
 	return ptr;
 }
 
-
 XiaomiGateway::XiaomiGateway(const int ID)
 {
 	m_HwdID = ID;
@@ -828,7 +313,6 @@ XiaomiGateway::XiaomiGateway(const int ID)
 	{
 		initDeviceAttrMap(devInfoTab, sizeof(devInfoTab)/sizeof(devInfoTab[0]));
 	}
-
 }
 
 XiaomiGateway::~XiaomiGateway(void)
@@ -836,319 +320,120 @@ XiaomiGateway::~XiaomiGateway(void)
 		std::cout<<"~XiaomiGateway"<<std::endl;
 }
 
-int XiaomiGateway::WriteToGeneralSwitch(const tRBUF *pCmd, int length, Json::Value& json)
+
+
+bool XiaomiGateway::createWriteParam(const char * pdata, int length, WriteParam& param, std::shared_ptr <Device>& dev)
 {
-	unsigned char packettype = pCmd->ICMND.packettype;
-	unsigned char subtype = pCmd->ICMND.subtype;
-	if (packettype != pTypeGeneralSwitch){
-		return -1;
-	}
-	int ret = -1;
-
-	_tGeneralSwitch *xcmd = (_tGeneralSwitch*)pCmd;
-	std::string key= "xxx";
-
-	unsigned int ssid = xcmd->id;
-	unsigned char unit = xcmd->unitcode;
-	WriteMsg msg;
-	msg.packet = reinterpret_cast<const unsigned char*>(pCmd);
-	msg.len = length;
-	msg.type = packettype;
-	msg.subType = subtype;
-	msg.unit =unit;
-	msg.wgMac = m_GatewaySID;
-	msg.key = "xxxx";
-	msg.miGateway = static_cast<void*>(this);
-
-	std::shared_ptr <Device> dev = 	XiaomiGateway::getDevice(ssid, 
-									static_cast<int>(packettype), 
-									static_cast<int>(subtype), 
-									static_cast<int>(unit));
-	if (dev)
+	if (pdata == nullptr)
 	{
-		bool res = dev->writeTo(msg);
-		if (res)
+		std::cout<<"message ptr null"<<std::endl;
+		return false;	
+	}
+	const tRBUF *pCmd = reinterpret_cast<const tRBUF *>(pdata);
+	unsigned char packetType = pCmd->ICMND.packettype;
+	unsigned char subType = pCmd->ICMND.subtype;
+	unsigned int ssid = 0;
+	unsigned char unit = 0;
+	switch(packetType)
+	{
+		case pTypeGeneralSwitch:
 		{
-			ret = 0;
+			const _tGeneralSwitch *xcmd = reinterpret_cast<const _tGeneralSwitch*>(pCmd);
+			ssid = xcmd->id;
+			unit = xcmd->unitcode;
 		}
-	}
-
-	return ret;
-}
-
-int XiaomiGateway::WriteToColorSwitch(const tRBUF *pCmd,  int length, Json::Value& json)
-{
-	std::cout<<"-----------WriteToColorSwitch----1---"<<std::endl;
-	unsigned char packettype = pCmd->ICMND.packettype;
-	unsigned char subtype = pCmd->ICMND.subtype;
-	if (packettype != pTypeColorSwitch){
-		std::cout<<"-----------WriteToColorSwitch--2----"<<std::endl;
-		return -1;
-	}
-
-	int ret = -1;
-
-	const _tColorSwitch *xcmd = reinterpret_cast<const _tColorSwitch*>(pCmd);
-	std::string key= "xxx";
-
-	unsigned int ssid = xcmd->id;
-	unsigned char unit = xcmd->dunit;
-	
-	std::shared_ptr <Device> dev = 	XiaomiGateway::getDevice(ssid, 
-									static_cast<int>(packettype), 
-									static_cast<int>(subtype), 
-								static_cast<int>(unit));
-
-	std::cout<<"-----------WriteToColorSwitch--3----"<<std::endl;
-	if (dev)
-	{
-		WriteMsg msg;
-		msg.packet = reinterpret_cast<const unsigned char*>(pCmd);
-		msg.len = length;
-		msg.type = packettype;
-		msg.subType = subtype;
-		msg.unit =unit;
-		msg.wgMac = m_GatewaySID;
-		msg.key = "xxxx";
-		msg.miGateway = static_cast<void*>(this);
-		bool res = dev->writeTo(msg);
-		if (res)
+		break;
+		case pTypeColorSwitch:
 		{
-			ret = 0;
+			const _tColorSwitch *xcmd = reinterpret_cast<const _tColorSwitch*>(pCmd);
+			ssid = xcmd->id;
+			unit = xcmd->dunit;
 		}
-	}
-	std::cout<<"-----------WriteToColorSwitch--4----:"<<ret<<std::endl;
-
-	return ret;
-
-
-#if 0
-	const _tColorSwitch *xcmd = reinterpret_cast<const _tColorSwitch*>(pCmd);
-	std::string channel= "xxx";
-	std::string commmand= "xxx";
-	std::string mac = "0";
-	std::string  model = "";
-
-	int brightness = 0;
-	int ir = 0;
-	int ig = 0;
-	int ib = 0;
-	int cw = 0;
-	int ww = 0;
-	int ct = 0;
-
-	int ssid = (unsigned int)xcmd->id;
-	mac = GetDeviceMac(ssid);
-	model = GetDeviceModel(ssid);
-
-	json["sid"] = mac.c_str();
-	json["model"] = model;
-	if (xcmd->command == Color_LedOn)
-	{
-		brightness = 42;
-		ir = 0xff;
-		ig = 0xff;
-		ib = 0xff;
-		cw = 0;
-		ww = 0;
-		ct = 0;
-		uint32_t value = (brightness << 24) | (ir << 16) | (ig << 8) | (ib);
-		uint32_t cwww = cw << 8 | ww;
-		json["params"][0]["light_rgb"] = value;
-		return 0;
-	}
-	else if (xcmd->command == Color_LedOff)
-	{
-		brightness = 0;
-		json["params"][0]["light_rgb"] = brightness;
-		return 0;
-	}
-	else if (xcmd->command == Color_SetColor)
-	{
-		if (xcmd->color.mode == ColorModeWhite)
+		break;
+		case pTypeMannageDevice:
 		{
-			ir = 0xff;
-			ig = 0xff;
-			ib = 0xff;
-			brightness = xcmd->value;
-			uint32_t value = (brightness << 24) | (ir << 16) | (ig << 8) | (ib);
-			json["params"][0]["light_rgb"] = value;
+			ssid = TbGateway::idConvert(m_GatewaySID).first;
+			unit = 1;	
 		}
-		else if (xcmd->color.mode == ColorModeTemp)
+		break;
+		default:
+			std::cout<<"no support type on write"<<std::endl;
+			return false;
+		break;
+	}
+
+	param.packet = reinterpret_cast<const unsigned char*>(pCmd);
+	param.len = length;
+	param.type = packetType;
+	param.subType = subType;
+	param.unit =unit;
+	param.gwMac = m_GatewaySID;
+	param.miGateway = static_cast<void*>(this);
+
+	dev.reset();
+	dev =	XiaomiGateway::getDevice(ssid, 
+							static_cast<int>(packetType), 
+							static_cast<int>(subType), 
+							static_cast<int>(unit));
+
+	if (packetType == pTypeMannageDevice)
+	{
+		const tRBUF *xcmd = reinterpret_cast<const tRBUF *>(pdata);
+		if (xcmd->MANNAGE.cmnd != cmdRmDevice)
 		{
-			cw = xcmd->color.cw;
-			ww = xcmd->color.ww;
-			ct = xcmd->color.t;
-			brightness = xcmd->value;
-			uint32_t cwww = cw << 8 | ww;
-			unsigned int con_br = (brightness > 100)? 100 : brightness;
-			unsigned int con_ct = (ct > 100)? 100 : ct;
-
-			json["params"][0]["color_temp"] = con_ct;
-			json["params"][1]["light_level"] = con_br;
+			return true;
 		}
-		else if (xcmd->color.mode == ColorModeRGB)
+		int rmSsid = xcmd->MANNAGE.id1 << 24 | xcmd->MANNAGE.id2 << 16 |
+					xcmd->MANNAGE.id3 << 8 | xcmd->MANNAGE.id4;
+		int rmType = xcmd->MANNAGE.value1;
+		int rmSubType = xcmd->MANNAGE.value2;
+		int rmUnit = xcmd->MANNAGE.value3;
+
+		std::shared_ptr <Device> rmDev =
+			XiaomiGateway::getDevice(rmSsid, rmType, rmSubType, unit);
+
+		if (!rmDev)
 		{
-			ir = xcmd->color.r;
-			ig = xcmd->color.g;
-			ib = xcmd->color.b;
-			brightness = xcmd->value; //TODO: What is the valid range for XiaomiGateway, 0..100 or 0..255?
-
-			uint32_t value = (brightness << 24) | (ir << 16) | (ig << 8) | (ib);
-			json["params"][0]["light_rgb"] = value;
+			return false;
 		}
-		else if (xcmd->color.mode == ColorModeCustom)
-		{
-			ir = xcmd->color.r;
-			ig = xcmd->color.g;
-			ib = xcmd->color.b;
-			cw = xcmd->color.cw;
-			ww = xcmd->color.ww;
-			ct = xcmd->color.t;
-			brightness = xcmd->value; //TODO: What is the valid range for XiaomiGateway, 0..100 or 0..255?
-
-			uint32_t value = (brightness << 24) | (ir << 16) | (ig << 8) | (ib);
-			uint32_t cwww = cw  << 8 | ww;
-
-			json["params"][0]["light_rgb"] = value;
-			json["params"][1]["light_cwww"] = cwww;
-			json["params"][2]["light_ct"] = ct;
-		}
-		else
-		{
-			_log.Log(LOG_STATUS, "XiaomiGateway: Set_Colour - Color mode %d is unhandled, if you have a suggestion for what it should do, please post on the Domoticz forum", xcmd->color.mode);
-			return -1;
-		}
-		return 0;
+		param.rmMac = rmDev->getMac();
 	}
-	else if ((xcmd->command == Color_SetBrightnessLevel) || (xcmd->command == Color_SetBrightUp) || (xcmd->command == Color_SetBrightDown))
-	{
-		//add the brightness
-		if (xcmd->command == Color_SetBrightUp) {
-			//brightness = std::min(m_GatewayBrightnessInt + 10, 255);
-		}
-		else if (xcmd->command == Color_SetBrightDown) {
-			//brightness = std::max(m_GatewayBrightnessInt - 10, 0);
-		}
-		else {
-			brightness = (int)xcmd->value; //TODO: What is the valid range for XiaomiGateway, 0..100 or 0..255?
-		}
-
-		uint32_t value = (brightness << 24) | (ir << 16) | (ig << 8) | (ib);
-
-		//unsigned int br = (255 * brightness) /0x64;
-		unsigned int br = (brightness > 100)? 100 : brightness;
-		json["params"][0]["light_rgb"] = value;
-		json["params"][1]["light_level"] = br;
-		return 0;
-	}
-	else if (xcmd->command == Color_SetColorToWhite)
-	{
-		//ignore Color_SetColorToWhite
-	}
-	else
-	{
-		_log.Log(LOG_ERROR, "XiaomiGateway: Unknown command %d", xcmd->command);
-	}
-	return -1;
-#endif
-}
-
-
-int XiaomiGateway::WriteToMannageDeive(const tRBUF *pCmd,  int length, Json::Value& json)
-{
-	unsigned char packettype = pCmd->ICMND.packettype;
-	unsigned char subtype = pCmd->ICMND.subtype;
-	if (packettype != pTypeMannageDevice){
-		return -1;
-	}
-	std::string mac = "0";
-	std::string mdmac = "0";
-
-	int mdssid = 0;
-	int mdid1 = pCmd->MANNAGE.id1;
-	int mdid2 = pCmd->MANNAGE.id2;
-	int mdid3 = pCmd->MANNAGE.id3;
-	int mdid4 = pCmd->MANNAGE.id4;
-
-	unsigned char mdtype = pCmd->MANNAGE.value1;
-	unsigned char mdsubtype = pCmd->MANNAGE.value2;
-	unsigned char mduint = pCmd->MANNAGE.value3;
-
-	mdssid = ((mdid1 << 24) & 0xff000000) | ((mdid2 << 16) & 0xff0000) | ((mdid3 << 8) & 0xff00) | (mdid4 & 0xff);
-
-	if (subtype == sTypeAddDevice)
-	{
-		const char* model = (const char*)&pCmd->MANNAGE.str[0];
-		std::string act = (pCmd->MANNAGE.cmnd == 1)? "yes":"no";
-		json["sid"] = m_GatewaySID;
-		json["model"] = "gateway";
-		json["params"][0]["join_permission"] = act;
-		json["params"][1]["model"] = model;
-	}
-	else  if (subtype == sTypeRmDevice)
-	{
-		mdmac = GetDeviceMac(mdssid);
-		json["sid"] = m_GatewaySID;
-		json["params"][0]["remove_device"] = mdmac;
-		DelDeviceInfo(mdssid);
-	}
-	return 0;
+	return true;
 }
 
 bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char length)
 {
 	const tRBUF *pCmd = reinterpret_cast<const tRBUF *>(pdata);
 	unsigned char packettype = pCmd->ICMND.packettype;
-	unsigned char subtype = pCmd->ICMND.subtype;
 	bool result = true;
-	std::string message = "";
-	int ret = -1;
 
-	if (m_GatewaySID == "") {
+	if (m_GatewaySID == "")
+	{
 		m_GatewaySID = XiaomiGatewayTokenManager::GetInstance().GetSID(m_GatewayIp);
 	}
 
-
-	std::string mac = "";
-	int ssid = 0;
-	Json::Value jroot;
-
-	jroot["cmd"] = "write";
-	jroot["key"] = "@gatewaykey";
-
-	ret = -1;
-	if (pTypeGeneralSwitch == packettype) {
-		ret = WriteToGeneralSwitch(pCmd, length, jroot);
-	}
-	else if (pTypeColorSwitch == packettype) {
-
-		ret = WriteToColorSwitch(pCmd, length, jroot);
-	}
-	else if (pTypeMannageDevice == packettype)
+	WriteParam param;
+	std::shared_ptr<Device> dev;
+	result = createWriteParam(pdata, length, param, dev);
+	if(false == result)
 	{
-		ret = WriteToMannageDeive(pCmd, length, jroot);
-	}
-	if(0 == ret){
-		message = JSonToRawString(jroot);
-	}
-	/* no need send message to gateway */
-	/* parse cmd failed or not support cmd */
-	else if (-1 == ret)
-	{
-		_log.Log(LOG_ERROR, "WriteToHardware ret == -1");
+		_log.Log(LOG_ERROR, "pdate param check error");
 		return false;
 	}
-	std::cout<<"-----------WriteToHardware--4----:"<<ret<<std::endl;
 
-	if (!message.empty()) {
-		_log.Debug(DEBUG_HARDWARE, "XiaomiGateway: message: '%s'", message.c_str());
-		result = SendMessageToGateway(message);
-		if (result == false) {
-			//send the message again
-			_log.Log(LOG_STATUS, "XiaomiGateway: SendMessageToGateway failed on first attempt, will try again");
-			sleep_milliseconds(100);
-			result = SendMessageToGateway(message);
+	result = dev->writeTo(param);
+	if (false == result)
+	{
+		sleep_milliseconds(200);
+		result = dev->writeTo(param);
+	}
+
+	if (result && packettype == pTypeMannageDevice )
+	{
+		const tRBUF *xcmd = reinterpret_cast<const tRBUF *>(pdata);
+		if (xcmd->MANNAGE.cmnd == cmdRmDevice)
+		{
+			delDeviceFromMap(param.rmMac);	
 		}
 	}
 	return result;
@@ -1165,6 +450,7 @@ bool XiaomiGateway::SendMessageToGateway(const std::string &controlmessage) {
 	remote_endpoint_ = boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(m_GatewayIp), m_GatewayUPort);
 	socket_.send_to(boost::asio::buffer(*message1), remote_endpoint_);
 	sleep_milliseconds(50);
+	_log.Log(LOG_STATUS,  "send to GW :%s", message.c_str());
 #if 0
 	sleep_milliseconds(150);
 	boost::array<char, 512> recv_buffer_;
@@ -1372,7 +658,6 @@ void XiaomiGateway::InsertUpdateRGBLight(const std::string & NodeID,const unsign
 			return;
 		}
 
-		
 		nvalue = atoi(result[0][0].c_str());
 		lastLevel = atoi(result[0][1].c_str());	
 		bright = (Brightness == "")? lastLevel : bright;
@@ -1388,63 +673,6 @@ void XiaomiGateway::InsertUpdateRGBLight(const std::string & NodeID,const unsign
 	}
 
 	
-}
-
-
-void XiaomiGateway::InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const unsigned char Mode, const std::string& Color, const std::string& Brightness, const bool bIsWhite,  const int battery)
-{
-	unsigned int sID = GetShortID(nodeid);
-	if (sID > 0)
-	{
-		bool tIsOn = false;
-		int lastLevel = 0;
-		int nvalue = 0;
-		int cmd = -1;
-		int irgb = 0;
-		int ibr = 0;
-
-		irgb = atoi(Color.c_str());
-		ibr = atoi(Brightness.c_str());
-
-		std::cout<<"InsertUpdateRGBLight:irgb:"<<irgb<<"string ibr:"<<Brightness<<"  ibr:"<<ibr<<std::endl;
-
-		std::vector<std::vector<std::string> > result;
-
-		int ssid = GetSsidBySid(pTypeColorSwitch, SubType, sID);
-		std::string devid = GetDeviceIdBySsid (pTypeColorSwitch, SubType, ssid);
-		result = m_sql.safe_query("SELECT nValue, LastLevel FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%q') AND (Type==%d) AND (SubType==%d)", m_HwdID, devid.c_str(), pTypeColorSwitch, SubType);
-		if (!result.empty())
-		{
-			nvalue = atoi(result[0][0].c_str());
-			tIsOn = (nvalue != 0);
-			lastLevel = atoi(result[0][1].c_str());
-
-			if (tIsOn == true && Color != "" && irgb == 0)
-			{
-				cmd = Color_LedOff; //turn off
-				ibr = lastLevel;
-			}
-			else if (tIsOn == false && Color != "" &&  irgb > 0)
-			{
-				cmd = Color_LedOn; //turn on
-				ibr = lastLevel;
-			}
-			else if (tIsOn == true  && Brightness != "" && ibr != lastLevel)
-			{
-				cmd = Color_SetBrightnessLevel; //set bright
-			}
-
-			if (cmd != -1)
-			{
-				SendRGBWSwitch(sID, 1, SubType, Mode , 0, ibr, cmd, battery, Name);
-			}
-			std::cout<<"nvalue:"<<tIsOn<<"  lastlevel:"<<lastLevel<<std::endl;;
-		}
-		else
-		{
-			SendRGBWSwitch(sID, 1, SubType, Mode , 0, ibr, Color_LedOn, battery, Name);
-		}
-	}
 }
 
 
@@ -1906,19 +1134,95 @@ unsigned int XiaomiGateway::GetShortID(const std::string & nodeid)
 	return (sID & 0xffffffff);
 }
 
-#if 0
-std::cout<<std::hex<<type<<std::endl;
-std::cout<<std::hex<<subtype<<std::endl;
-std::cout<<switchtype<<std::endl;
-std::cout<<uint<<std::endl;
-std::cout<<outlet<<std::endl;
-std::cout<<devopt<<std::endl;
-std::cout<<ssid<<std::endl;
-std::cout<<devid<<std::endl;
+void XiaomiGateway::deviceListHandler(Json::Value& root)
+{
+	std::string gwSid;
+	std::string token;
+	std::string sid;
+	std::string model;
+	std::string message;
 
+	gwSid = root["sid"].asString();
+	token = root["token"].asString();
+	model = root["model"].asString();
+	if (!XiaomiGateway::getDevice(gwSid))
+	{
+		const DevAttr* attr = XiaomiGateway::findDevAttr(model);
+		std::shared_ptr<Device> dev(new Device (gwSid, attr)); 
+		XiaomiGateway::addDeviceToMap(gwSid, dev);			
+	}
 
-#endif
+	XiaomiGatewayTokenManager::GetInstance().UpdateTokenSID(m_GatewayIp, token, gwSid);
+	SetDevInfoInited(true);
 
+	Json::Value list = root["dev_list"];
+	for (int ii = 0; ii < (int)list.size(); ii++)
+	{
+		sid = list[ii]["sid"].asString();
+		model = list[ii]["model"].asString();
+		if (sid == "" || model == "")
+		{
+			_log.Log(LOG_ERROR, "XiaomiGateway: dev_list sid or model not in json");
+			continue;
+		}
+
+		/* if support the device */
+		const DevAttr* attr = XiaomiGateway::findDevAttr(model);
+		if(nullptr == attr)
+		{
+			Json::Value del_cmd;
+			del_cmd["cmd"] = "write";
+			del_cmd["key"] = "@gatewaykey";
+			del_cmd["sid"] = gwSid;
+			del_cmd["params"][0]["remove_device"] = sid;
+			message = JSonToRawString (del_cmd);
+			std::shared_ptr<std::string> send_buff(new std::string(message));
+			SendMessageToGateway(message);
+			_log.Log(LOG_ERROR, "XiaomiGateway: not support the device model:%s  mac:%s", sid.c_str(), model.c_str());
+			continue;
+		}
+		/* if device exist */
+		if (!XiaomiGateway::getDevice(sid))
+		{
+			std::shared_ptr<Device> dev(new Device (sid, attr)); 
+			XiaomiGateway::addDeviceToMap(sid, dev);
+			createDtDevice(dev);
+		}
+
+		Json::Value read_cmd;
+		read_cmd["cmd"] = "read";
+		read_cmd["sid"] = sid;
+		message = JSonToRawString (read_cmd);
+		SendMessageToGateway(message);
+	}
+
+}
+
+void XiaomiGateway::joinGatewayHandler(Json::Value& root)
+{
+	std::string sid = root["sid"].asString();
+	std::string model = root["model"].asString();
+	std::string ip = root["ip"].asString();
+	std::string port =	root["port"].asString();
+
+	if (ip != GetGatewayIp())
+	{
+		_log.Log(LOG_ERROR, "a new gateway incoming, but not in domoticz hardware list, ip:%s", ip.c_str());
+		return;
+	}
+	m_GatewayUPort = std::stoi(port);
+
+	if (!XiaomiGateway::getDevice(sid))
+	{
+		const DevAttr* attr = XiaomiGateway::findDevAttr(model);
+		std::shared_ptr<Device> dev(new Device (sid, attr)); 
+		XiaomiGateway::addDeviceToMap(sid, dev);
+	}
+
+	std::string message = "{\"cmd\" : \"discovery\"}";
+	SendMessageToGateway(message);
+	_log.Log(LOG_STATUS, "Tenbat Gateway: RGB Gateway Detected");
+}
 static inline int customImage(int switchtype)
 {
 	int customimage = 0;
@@ -2120,20 +1424,20 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 		return;
 	}
 
+	std::string remoteAddr = remote_endpoint_.address().to_v4().to_string();
 
-	XiaomiGateway * TrueGateway = m_XiaomiGateway->GatewayByIp(m_gatewayip);
+	XiaomiGateway * TrueGateway = m_XiaomiGateway->GatewayByIp(remoteAddr);
 	if (!TrueGateway)
 	{
-		_log.Log(LOG_ERROR, "XiaomiGateway: received data from  unregisted gateway ip:%s!", remote_endpoint_.address().to_v4().to_string().c_str());
+		_log.Log(LOG_ERROR, "XiaomiGateway: received data from  unregisted gateway ip:%s!", remoteAddr.c_str());
 		start_receive();
 		return;
 	}
 
+#define _DEBUG
 #ifdef _DEBUG
-	_log.Log(LOG_STATUS, data_);
+	_log.Log(LOG_STATUS, "%s", data_);
 #endif
-	_log.Log(LOG_STATUS, "XiaomiGateway: recv: %s", data_);
-
 
 	Json::Value root;
 	bool showmessage = true;
@@ -2151,11 +1455,8 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 	std::string sid = root[XiaoMi::key_sid].asString();
 	Json::Value params = root[XiaoMi::key_params];
 
-
 	_log.Log(LOG_STATUS, "XiaomiGateway: cmd  %s received!", cmd.c_str());
 
-	
-	int unitcode = 1;
 	if ((cmd == XiaoMi::rsp_read) || (cmd ==XiaoMi::rsp_write) || (cmd == XiaoMi::rep_report) || (cmd == XiaoMi::rep_hbeat))
 	{
 		if(!params.isArray())
@@ -2167,76 +1468,15 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 		std::shared_ptr <Device> dev = XiaomiGateway::getDevice(sid);
 		if (dev)
 		{
-			dev->recvFrom(message, static_cast<void*>(TrueGateway));
+			ReadParam param;
+			param.message  = message;
+			param.miGateway = static_cast<void*>(TrueGateway);
+			dev->recvFrom(param);
 		}
 	}
 	else if (cmd == XiaoMi::rsp_discorey)
 	{
-		Json::Value list = root["dev_list"];
-		std::string sid = "";
-		std::string gw_sid = "";
-		std::string token = "";
-		std::string model = "";
-		std::string name = "";
-		std::string soptions = "";
-		std::string devopt = "";
-		int devtype = 0;
-		int subtype = 0;
-		int switchtype = 0;
-		int ssid = 0;
-		int uint = 0;
-		uint64_t DeviceRowIdx = (uint64_t )-1;
-
-
-		gw_sid = root["sid"].asString();
-		token = root["token"].asString();
-		std::string ip = m_gatewayip;
-
-		XiaomiGatewayTokenManager::GetInstance().UpdateTokenSID(ip, token, gw_sid);
-		/* get device list , set up ssid model mac map */
-		TrueGateway->SetDevInfoInited(true);
-		std::string message;
-
-		boost::asio::ip::udp::endpoint remote_endpoint;
-		remote_endpoint = boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(TrueGateway->GetGatewayIp().c_str()), m_uincastport);
-		for (int i = 0; i < (int)list.size(); i++)
-		{
-			sid = list[i]["sid"].asString();
-			model = list[i]["model"].asString();
-			if (sid == "" || model == "")
-			{
-				continue;
-			}
-
-			const DevAttr* attr = XiaomiGateway::findDevAttr(model);
-			if(nullptr == attr)
-			{
-				Json::Value del_cmd;
-				del_cmd["cmd"] = "write";
-				del_cmd["key"] = TrueGateway->GetGatewayKey();
-				del_cmd["sid"] = gw_sid;
-				del_cmd["params"][0]["remove_device"] = sid;
-				message = JSonToRawString (del_cmd);
-				std::shared_ptr<std::string> send_buff(new std::string(message));
-				socket_.send_to(boost::asio::buffer(*send_buff), remote_endpoint);
-				continue;
-			}
-
-			if (XiaomiGateway::getDevice(sid).get() == nullptr)
-			{
-				std::shared_ptr<Device> dev(new Device (sid, attr)); 
-				XiaomiGateway::addDeviceToMap(sid, dev);
-				TrueGateway->createDtDevice(dev);
-			}
-
-			Json::Value read_cmd;
-			read_cmd["cmd"] = "read";
-			read_cmd["sid"] = sid;
-			message = JSonToRawString (read_cmd);
-			std::shared_ptr<std::string> send_buff(new std::string(message));
-			socket_.send_to(boost::asio::buffer(*send_buff), remote_endpoint);
-			_log.Log(LOG_STATUS,  "send to GW :%s", message.c_str());
-		}
+		TrueGateway->deviceListHandler(root);
 		showmessage = false;
 	}
 	else if (cmd == XiaoMi::rsp_whois)
@@ -2247,39 +1487,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 			start_receive();
 			return;
 		}
-		std::string ip = root["ip"].asString();
-		std::string port =  root["port"].asString();
-		m_uincastport = (port == "")? 9494 : atoi(port.c_str());
-		TrueGateway->SetUincastPort(m_uincastport);
-
-		if (model == "gateway" || model == "gateway.v3" || model == "acpartner.v3" || model == "gateway.aq1")
-		{
-			if (ip == TrueGateway->GetGatewayIp())
-			{
-				_log.Log(LOG_STATUS, "XiaomiGateway: RGB Gateway Detected");
-
-				//query for list of devices
-				std::string message = "{\"cmd\" : \"discovery\"}";
-				std::shared_ptr<std::string> message2(new std::string(message));
-				boost::asio::ip::udp::endpoint remote_endpoint;
-				remote_endpoint = boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(TrueGateway->GetGatewayIp().c_str()), m_uincastport);
-				socket_.send_to(boost::asio::buffer(*message2), remote_endpoint);
-			}
-		}
-		else if (model == "TBL-V01-GL")
-		{
-			if (ip == TrueGateway->GetGatewayIp())
-			{
-				_log.Log(LOG_STATUS, "Tenbat Gateway: RGB Gateway Detected");
-
-				TrueGateway->InsertUpdateSwitch(sid.c_str(), "Gateway Join Button", false, static_cast<const _eSwitchType>(STYPE_OnOff), 254, 0, cmd, "", "", 255);
-				std::string message = "{\"cmd\" : \"discovery\"}";
-				std::shared_ptr<std::string> message2(new std::string(message));
-				boost::asio::ip::udp::endpoint remote_endpoint;
-				remote_endpoint = boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(TrueGateway->GetGatewayIp().c_str()), m_uincastport);
-				socket_.send_to(boost::asio::buffer(*message2), remote_endpoint);
-			}
-		}
+		TrueGateway->joinGatewayHandler(root);
 		showmessage = false;
 	}
 	else
@@ -2456,108 +1664,3 @@ namespace http {
 
 		}
 }
-
-
-
-
-
-#if 0
-	mac = GetDeviceMac(ssid);
-	json["sid"]=mac.c_str();
-	json["model"] = GetDeviceModel(ssid);
-
-	switch (subtype)
-	{
-		case sSwitchGeneralSwitch:
-		{
-			/* plug */
-			if (xcmd->unitcode == 1)
-			{
-				commmand = (xcmd->cmnd == gswitch_sOn)?"on":"off";
-				json["params"][0]["channel_0"] = commmand;
-			}
-			else if (xcmd->unitcode == 2)
-			{
-				commmand = (xcmd->cmnd == gswitch_sOn)?"on":"off";
-				json["params"][0]["channel_1"] = commmand;
-			}
-			else if (xcmd->unitcode == 6)
-			{
-				json["sid"] = m_GatewaySID;
-				json["model"] = "gateway";
-				if (xcmd->cmnd == 1)
-				{
-					std::vector<std::vector<std::string> > result;
-					result = m_sql.safe_query("SELECT Value FROM UserVariables WHERE (Name == 'XiaomiMP3')");
-					json["params"][0]["mid"] = result[0][0].c_str();
-				}
-				else
-				{
-					json["params"][0]["mid"] ="10000";
-				}
-			}
-			else if (xcmd->unitcode == 8)
-			{
-				commmand = (xcmd->cmnd == 1)?"on":"off";
-				json["params"][0]["channel_0"] = commmand;
-			}
-			else if (xcmd->unitcode == 9)
-			{
-				commmand = (xcmd->cmnd == 1)?"on":"off";
-				json["params"][0]["channel_0"] = commmand;
-			}
-			else if (xcmd->unitcode == 10)
-			{
-				commmand = (xcmd->cmnd == 1)?"on":"off";
-				json["params"][0]["channel_0"] = commmand;
-			}
-			else if (xcmd->unitcode == 254)
-			{
-				commmand = (xcmd->cmnd == 1)?"on":"off";
-				json["model"] = "gateway";
-				json["params"][0]["join_permission"] = "yes";
-			}
-			else
-			{
-				std::cout<<"sSwitchGeneralSwitch uint unkown"<<std::endl;
-				return -1;
-			}
-			return 0;
-		}
-		break;
-
-		case sSwitchTypeSelector:
-		{
-			 if(xcmd->unitcode >= 3 && xcmd->unitcode <= 5)
-			 {
-				 int level = xcmd->level;
-				 if (level == 0) { level = 10000; }
-				 else {
-					 if (xcmd->unitcode == 3) {
-						 //Alarm Ringtone
-						 if (level > 0) { level = (level / 10) - 1; }
-					 }
-					 else if (xcmd->unitcode == 4) {
-						 //Alarm Clock
-						 if (level > 0) { level = (level / 10) + 19; }
-					 }
-					 else if (xcmd->unitcode == 5) {
-						 //Doorbell
-						 if (level > 0) { level = (level / 10) + 9; }
-					 }
-				 }
-				 json["params"][0]["vol"] =level;
-				 return 0;
-			 }
-			 return 1;
-		}
-		break;
-		case sSwitchBlindsT2:
-		{
-
-		}
-		break;
-	}
-#endif
-
-

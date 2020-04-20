@@ -11448,8 +11448,8 @@ bool MainWorker::DeleteSingleDevice(const std::string& idx)
 	tRBUF tcmd;
 	tcmd.MANNAGE.packetlength = sizeof(tcmd.ICMND);
 	tcmd.MANNAGE.packettype = pTypeMannageDevice;
-	tcmd.MANNAGE.subtype = sTypeRmDevice;
-	tcmd.MANNAGE.cmnd = 1;
+	tcmd.MANNAGE.subtype = sTypeTenbay;
+	tcmd.MANNAGE.cmnd = cmdRmDevice;
 	ssid = GetSsidByDeviceId(Type, SubType, DevicId);
 
 	tcmd.MANNAGE.id1 = (unsigned char)((ssid>>24) & 0xff);
@@ -11499,14 +11499,15 @@ bool MainWorker::AddZigbeeDevice(const std::string& idx, const std::string& cmd,
 	tRBUF tcmd;
 	tcmd.MANNAGE.packetlength = sizeof(tcmd.ICMND);
 	tcmd.MANNAGE.packettype = pTypeMannageDevice;
-	tcmd.MANNAGE.subtype = sTypeAddDevice;
-	tcmd.MANNAGE.cmnd = (cmd == "On")?1 : 0;
+	tcmd.MANNAGE.subtype = sTypeTenbay;
+	tcmd.MANNAGE.cmnd = cmdAddDevice;
 
 
 	tcmd.MANNAGE.id1 = 0;
 	tcmd.MANNAGE.id2 = 0;
 	tcmd.MANNAGE.id3 = 0;
 	tcmd.MANNAGE.id4 = 0;
+	tcmd.MANNAGE.value1 = (cmd == "On")? 1: 0;
 
 	memset (tcmd.MANNAGE.str, 0, sizeof(tcmd.MANNAGE.str));
 	strncpy ((char*)&tcmd.MANNAGE.str[0], model.c_str(), sizeof(tcmd.MANNAGE.str)-1);

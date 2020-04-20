@@ -178,7 +178,7 @@ SDK version 7.01
 	SelectPlus200689103 Black Chime added
 
 SDK version 7.00
-	TEMP7 - TSS330 added and TH9 – TSS320 added
+	TEMP7 - TSS330 added and TH9 TSS320 added
 	BlindsT8 = Chamberlain CS4330CN added
 	SelectPlus200689101 White Chime added
 	Interface command - start receiver added
@@ -393,9 +393,12 @@ SDK version 4.9
 */
 
 
-#define pTypeMannageDevice 0x33
-#define sTypeAddDevice   0x01
-#define sTypeRmDevice   0x02
+#define pTypeMannageDevice 0x80
+#define sTypeTenbay   	   0x00
+#define cmdAddDevice       0x00
+#define cmdRmDevice        0x01
+
+//#define sTypeRmDevice   0x02
 
 //types for Interface Control
 #define pTypeInterfaceControl 0x00
@@ -2708,11 +2711,11 @@ typedef union tRBUF {
 	BYTE	id3;
 	BYTE	id4;
 	BYTE	uincode;
-	BYTE	value0;
 	BYTE	value1;
 	BYTE	value2;
 	BYTE	value3;
-	BYTE    str[128];
+	BYTE	value4;
+	BYTE    str[64];
     } MANNAGE;
 
 } RBUF;

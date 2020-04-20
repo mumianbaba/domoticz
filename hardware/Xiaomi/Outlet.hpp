@@ -12,6 +12,26 @@
 namespace XiaoMi{
 
 
+struct WriteParam{
+	const unsigned char* packet;
+	int len;
+	int type;
+	int subType;
+	int unit;
+	std::string mac;
+	std::string model;
+	std::string gwMac;
+	std::string rmMac;
+	std::string key;
+	void * miGateway;
+};
+
+struct ReadParam{
+	std::string message;
+	void * miGateway;
+
+};
+
 class OutletAttr
 {
 public:
@@ -22,8 +42,8 @@ public:
 	friend std::ostream & operator << (std::ostream& out, OutletAttr* outletAttr);
 
 public:
-	virtual bool recvFrom(std::string& root, void * miGateway) const = 0;
-	virtual bool writeTo(const unsigned char* packet, int len, std::string& mac, std::string& model, std::string& gwMac, std::string& key, void * miGateway) const = 0;
+	virtual bool recvFrom(const ReadParam&  param) const = 0;
+	virtual bool writeTo(const WriteParam&  param) const = 0;
 	virtual SsidPair idConverter(const std::string& mac) const;
 
 public:
