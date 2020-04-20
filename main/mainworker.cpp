@@ -6097,16 +6097,34 @@ void MainWorker::decode_ColorSwitch(const CDomoticzHardwareBase* pHardware, cons
 	{
 		std::vector<std::vector<std::string> > result;
 		result = m_sql.safe_query(
-			"SELECT ID,Name FROM DeviceStatus WHERE (HardwareID=%d AND DeviceID='%q' AND Unit=%d AND Type=%d AND SubType=%d)",
+			"SELECT ID, Name, Color FROM DeviceStatus WHERE (HardwareID=%d AND DeviceID='%q' AND Unit=%d AND Type=%d AND SubType=%d)",
 			pHardware->m_HwdID, ID.c_str(), Unit, devType, subType);
 		if (!result.empty())
 		{
 			uint64_t ulID = std::strtoull(result[0][0].c_str(), nullptr, 10);
 
+			_tColor old(result[0][2]);
+
+			switch (color.mode)
+			{
+				case ColorModeTemp:
+					old.mode = ColorModeTemp;
+					old.t = color.t;
+				break;
+				case ColorModeRGB:
+					old.mode = ColorModeRGB;
+					old.r = color.r;
+					old.g = color.g;
+					old.b = color.b;
+				break;
+				case ColorModeCustom:
+					old = color;
+				break;
+			}
 			//store color in database
 			m_sql.safe_query(
 				"UPDATE DeviceStatus SET Color='%q' WHERE (ID = %" PRIu64 ")",
-				color.toJSONString().c_str(),
+				old.toJSONString().c_str(),
 				ulID);
 		}
 
