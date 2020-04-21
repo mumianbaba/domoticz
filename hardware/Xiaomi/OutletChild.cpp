@@ -12,8 +12,8 @@
 #include "../hardwaretypes.h"
 #include "../../main/RFXNames.h"
 #include "../../main/json_helper.h"
-
-
+#include "../../main/RFXtrx.h"
+#include "../XiaomiGateway.h"
 
 namespace XiaoMi{
 
@@ -171,7 +171,7 @@ bool OnOffOutlet::writeTo(const WriteParam& param) const
 
 	std::string message = JSonToRawString(root);
 	XiaomiGateway* gw = static_cast<XiaomiGateway*>(miGateway);
-	gw->SendMessageToGateway(message);
+	gw->sendMessageToGateway(message);
 	return true;
 }
 
@@ -892,6 +892,7 @@ bool LedOutlet::writeTo(const WriteParam&  param) const
 		unsigned int bright = (unsigned int)xcmd->value; 
 		bright = (bright > 100)? 100 : bright;
 		root["params"][0]["light_level"] = bright;
+		root["params"][1]["power_status"] = "on";
 		commit = true;
 	}
 
@@ -899,7 +900,7 @@ bool LedOutlet::writeTo(const WriteParam&  param) const
 	{
 		std::string message = JSonToRawString(root);
 		XiaomiGateway* gw = static_cast<XiaomiGateway*>(miGateway);
-		gw->SendMessageToGateway(message);
+		gw->sendMessageToGateway(message);
 		return true;
 	}
 
@@ -970,7 +971,7 @@ bool LedOutlet::writeTo(const WriteParam&  param) const
 	}
 	std::string message = JSonToRawString(root);
 	XiaomiGateway* gw = static_cast<XiaomiGateway*>(miGateway);
-	gw->SendMessageToGateway(message);
+	gw->sendMessageToGateway(message);
 
 	return true;
 }
@@ -1079,7 +1080,7 @@ bool TbGateway::writeTo(const WriteParam& param) const
 	root["key"] = "@gatewaykey";
 	std::string message = JSonToRawString(root);
 	XiaomiGateway* gw = static_cast<XiaomiGateway*>(miGateway);
-	gw->SendMessageToGateway(message);
+	gw->sendMessageToGateway(message);
 	return true;
 }
 

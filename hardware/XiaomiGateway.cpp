@@ -73,104 +73,112 @@ const char* rep_hbeat = "heartbeat";
 
 using namespace XiaoMi;
 
+std::list<XiaomiGateway*> XiaomiGateway::m_gwList;
+std::mutex XiaomiGateway::m_gwListMutex;
 
- AttrMap XiaomiGateway::m_attrMap;
- DeviceMap XiaomiGateway::m_deviceMap;
- 
- std::list<XiaomiGateway*> gatewaylist;
- std::mutex gatewaylist_mutex;
-
+AttrMap XiaomiGateway::m_attrMap;
+DeviceMap XiaomiGateway::m_deviceMap;
 
 
-int XiaomiGateway::GetUincastPort()
+
+
+XiaomiGateway::XiaomiGateway(const int ID)
 {
-	return m_GatewayUPort;
-}
-
-void XiaomiGateway::SetUincastPort(int port)
-{
-	m_GatewayUPort = port;
-}
-
-XiaomiGateway * XiaomiGateway::GatewayByIp(std::string ip)
-{
-	XiaomiGateway * ret = NULL;
+	m_HwdID = ID;
+	m_bDoRestart = false;
+	m_ListenPort9898 = false;
+	m_bDevInfoInited = false;
+	m_GatewayUPort = 0;
+	if (m_attrMap.empty())
 	{
-		std::unique_lock<std::mutex> lock(gatewaylist_mutex);
-		std::list<XiaomiGateway*>::iterator    it = gatewaylist.begin();
-		for (; it != gatewaylist.end(); it++)
-		{
-			_log.Debug(DEBUG_HARDWARE, "XiaomiGateway: GatewayByIp gateway:%s find:%s", (*it)->GetGatewayIp().c_str(), ip.c_str());
-			if ((*it)->GetGatewayIp() == ip)
-			{
-				ret = (*it);
-				break;
-			}
-		}
-	}
-	return ret;
-}
-
-void XiaomiGateway::AddGatewayToList()
-{
-	XiaomiGateway * maingw = NULL;
-	{
-		std::unique_lock<std::mutex> lock(gatewaylist_mutex);
-		std::list<XiaomiGateway*>::iterator    it = gatewaylist.begin();
-		for (; it != gatewaylist.end(); it++)
-		{
-			if ((*it)->IsMainGateway())
-			{
-				maingw = (*it);
-				break;
-			}
-		};
-
-		if (!maingw)
-		{
-			SetAsMainGateway();
-		}
-		else
-		{
-			maingw->UnSetMainGateway();
-		}
-		gatewaylist.push_back(this);
-	}
-
-	if (maingw)
-	{
-		maingw->Restart();
+		initDeviceAttrMap(devInfoTab, sizeof(devInfoTab)/sizeof(devInfoTab[0]));
 	}
 }
 
-void XiaomiGateway::RemoveFromGatewayList()
+XiaomiGateway::~XiaomiGateway(void)
 {
-	XiaomiGateway * maingw = NULL;
-	{
-		std::unique_lock<std::mutex> lock(gatewaylist_mutex);
-		gatewaylist.remove(this);
-		if (IsMainGateway())
-		{
-			UnSetMainGateway();
+		std::cout<<"~XiaomiGateway"<<std::endl;
+}
 
-			if (gatewaylist.begin() != gatewaylist.end())
-			{
-				std::list<XiaomiGateway*>::iterator    it = gatewaylist.begin();
-				maingw = (*it);
-			}
-		}
+
+
+bool XiaomiGateway::StartHardware()
+{
+	RequestStart();
+
+	m_bDoRestart = false;
+	m_bDevInfoInited = false;
+
+	//force connect the next first time
+	m_bIsStarted = true;
+
+	m_GatewayMusicId = "10000";
+	m_GatewayVolume = "20";
+
+	std::vector<std::vector<std::string> > result;
+	result = m_sql.safe_query("SELECT Password, Address FROM Hardware WHERE Type=%d AND ID=%d AND Enabled=1", HTYPE_XiaomiGateway, m_HwdID);
+
+	if (result.empty())
+		return false;
+
+	m_GatewayPassword = result[0][0].c_str();
+	m_GatewayIp = result[0][1].c_str();
+
+	m_GatewayRgbR = 255;
+	m_GatewayRgbG = 255;
+	m_GatewayRgbB = 255;
+	m_GatewayRgbCW = 255;
+	m_GatewayRgbWW = 255;
+	m_GatewayRgbCT = 255;
+	m_GatewayBrightnessInt = 100;
+
+	//check for presence of Xiaomi user variable to enable message output
+	m_OutputMessage = false;
+	result = m_sql.safe_query("SELECT Value FROM UserVariables WHERE (Name == 'XiaomiMessage')");
+	if (!result.empty()) {
+		m_OutputMessage = true;
+	}
+	//check for presence of Xiaomi user variable to enable additional voltage devices
+	m_IncludeVoltage = false;
+	result = m_sql.safe_query("SELECT Value FROM UserVariables WHERE (Name == 'XiaomiVoltage')");
+	if (!result.empty()) {
+		m_IncludeVoltage = true;
+	}
+	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Delaying worker startup...", m_HwdID);
+	sleep_seconds(5);
+
+	XiaomiGatewayTokenManager::GetInstance();
+
+	addGatewayToList();
+
+	if (m_ListenPort9898)
+	{
+		_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Selected as main Gateway", m_HwdID);
 	}
 
-	if (maingw)
+	//Start worker thread
+	m_thread = std::shared_ptr<std::thread>(new std::thread(&XiaomiGateway::Do_Work, this));
+	SetThreadNameInt(m_thread->native_handle());
+
+	return (m_thread != nullptr);
+}
+
+bool XiaomiGateway::StopHardware()
+{
+	if (m_thread)
 	{
-		maingw->Restart();
+		RequestStop();
+		m_thread->join();
+		m_thread.reset();
 	}
+	m_bIsStarted = false;
+	return true;
 }
 
 // Use this function to get local ip addresses via getifaddrs when Boost.Asio approach fails
 // Adds the addresses found to the supplied vector and returns the count
 // Code from Stack Overflow - https://stackoverflow.com/questions/2146191
-int XiaomiGateway::get_local_ipaddr(std::vector<std::string>& ip_addrs)
+int XiaomiGateway::getLocalIpAddr(std::vector<std::string>& ip_addrs)
 {
 #ifdef WIN32
 	return 0;
@@ -230,6 +238,164 @@ int XiaomiGateway::get_local_ipaddr(std::vector<std::string>& ip_addrs)
 #endif
 }
 
+void XiaomiGateway::Do_Work()
+{
+	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Worker started...", m_HwdID);
+	boost::asio::io_service io_service;
+	//find the local ip address that is similar to the xiaomi gateway
+	try {
+		boost::asio::ip::udp::resolver resolver(io_service);
+		boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), m_GatewayIp, "");
+		boost::asio::ip::udp::resolver::iterator endpoints = resolver.resolve(query);
+		boost::asio::ip::udp::endpoint ep = *endpoints;
+		boost::asio::ip::udp::socket socket(io_service);
+		socket.connect(ep);
+		boost::asio::ip::address addr = socket.local_endpoint().address();
+		std::string compareIp = m_GatewayIp.substr(0, (m_GatewayIp.length() - 3));
+		std::size_t found = addr.to_string().find(compareIp);
+		if (found != std::string::npos) {
+			m_LocalIp = addr.to_string();
+			_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Using %s for local IP address.", m_HwdID, m_LocalIp.c_str());
+		}
+	}
+	catch (std::exception& e) {
+		_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Could not detect local IP address using Boost.Asio: %s", m_HwdID, e.what());
+	}
+
+	// try finding local ip using ifaddrs when Boost.Asio fails
+	if (m_LocalIp == "") {
+		try {
+			// get first 2 octets of Xiaomi gateway ip to search for similar ip address
+			std::string compareIp = m_GatewayIp.substr(0, (m_GatewayIp.length() - 3));
+			_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): XiaomiGateway IP address starts with: %s", m_HwdID, compareIp.c_str());
+
+			std::vector<std::string> ip_addrs;
+			if (XiaomiGateway::getLocalIpAddr(ip_addrs) > 0)
+			{
+				for (const std::string &addr : ip_addrs)
+				{
+					std::size_t found = addr.find(compareIp);
+					if (found != std::string::npos)
+					{
+						m_LocalIp = addr;
+						_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Using %s for local IP address.", m_HwdID, m_LocalIp.c_str());
+						break;
+					}
+				}
+			}
+			else
+			{
+				_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Could not find local IP address with ifaddrs", m_HwdID);
+			}
+		}
+		catch (std::exception& e) {
+			_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Could not find local IP address with ifaddrs: %s", m_HwdID, e.what());
+		}
+	}
+
+	XiaomiGateway::xiaomi_udp_server udp_server(io_service, m_HwdID, m_GatewayIp, m_LocalIp, m_ListenPort9898, m_OutputMessage, m_IncludeVoltage, this);
+	boost::thread bt;
+	boost::thread bt2;
+	if (m_ListenPort9898) {
+		bt = boost::thread(boost::bind(&boost::asio::io_service::run, &io_service));
+		SetThreadName(bt.native_handle(), "XiaomiGatewayIO");
+
+		bt2 = boost::thread(boost::bind(&XiaomiGateway::xiaomi_udp_server::whois, &udp_server));
+		SetThreadName(bt2.native_handle(), "XiaomiGatewayWhois");
+	}
+
+	int sec_counter = 0;
+	while (!IsStopRequested(1000))
+	{
+		sec_counter++;
+		if (sec_counter % 12 == 0) {
+			m_LastHeartbeat = mytime(NULL);
+		}
+		if (sec_counter % 60 == 0)
+		{
+			//_log.Log(LOG_STATUS, "sec_counter %d", sec_counter);
+		}
+	}
+
+	bt2.interrupt();
+	bt2.join();
+	io_service.stop();
+	rmFromGatewayList();
+	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): stopped", m_HwdID);
+}
+
+
+XiaomiGateway * XiaomiGateway::getGatewayByIp(std::string ip)
+{
+	XiaomiGateway * ret = NULL;
+	{
+		std::unique_lock<std::mutex> lock(m_gwListMutex);
+		for (const auto& itt : m_gwList)
+		{
+			if (itt->getGatewayIp() == ip)
+			{
+				_log.Debug(DEBUG_HARDWARE, "XiaomiGateway: find a gateway ip:%s at list", ip.c_str());
+				ret = itt;
+				break;
+			}
+		}
+	}
+	return ret;
+}
+
+void XiaomiGateway::addGatewayToList()
+{
+	XiaomiGateway * maingw = NULL;
+	{
+		std::unique_lock<std::mutex> lock(m_gwListMutex);
+		for (const auto& itt : m_gwList)
+		{
+			if (itt->IsMainGateway())
+			{
+				maingw = (itt);
+				break;
+			}
+		}
+
+		if (!maingw)
+		{
+			SetAsMainGateway();
+		}
+		else
+		{
+			maingw->UnSetMainGateway();
+		}
+		m_gwList.push_back(this);
+	}
+	if (maingw)
+	{
+		maingw->Restart();
+	}
+}
+
+void XiaomiGateway::rmFromGatewayList()
+{
+	XiaomiGateway * maingw = NULL;
+	{
+		std::unique_lock<std::mutex> lock(m_gwListMutex);
+		m_gwList.remove(this);
+		if (IsMainGateway())
+		{
+			UnSetMainGateway();
+			if (!m_gwList.empty())
+			{
+				auto  it = m_gwList.begin();
+				maingw = (*it);
+			}
+		}
+	}
+
+	if (maingw)
+	{
+		maingw->Restart();
+	}
+}
+
 void XiaomiGateway::initDeviceAttrMap(const DevInfo devInfo[], int size)
 {
 	int ii;
@@ -244,7 +410,7 @@ void XiaomiGateway::initDeviceAttrMap(const DevInfo devInfo[], int size)
 	}
 	return;
 }
-									
+
 const DevAttr* XiaomiGateway::findDevAttr(std::string& model)
 {
 	auto it = m_attrMap.find(model);
@@ -275,7 +441,7 @@ std::shared_ptr<Device> XiaomiGateway::getDevice(std::string& mac)
 	if (it == m_deviceMap.end())
 	{
 		std::cout<<"error: getDevice failed mac:"<<mac<<std::endl;
-		return ptr;
+		return nullptr;
 	}
 	return it->second;
 }
@@ -295,30 +461,13 @@ std::shared_ptr<Device> XiaomiGateway::getDevice(unsigned int ssid, int type, in
 	}
 	if (ptr.get() == nullptr)
 	{
-		std::cout<<"error: getDevice failed ssid:"<<std::hex<<ssid <<"	type:"<<std::hex<<type;
-		std::cout<<" subType: "<<std::hex<<subType<<"  unit:"<<unit<<std::endl;
+		_log.Log(LOG_ERROR, "getDevice failed ssid:%x  type:%x  subType:%x  unit:%d", ssid, type, subType, unit);
+		return nullptr;
 	}
 	return ptr;
 }
 
-XiaomiGateway::XiaomiGateway(const int ID)
-{
-	m_HwdID = ID;
-	m_bDoRestart = false;
-	m_ListenPort9898 = false;
-	m_bDevInfoInited = false;
-	m_GatewayUPort = 9494;
 
-	if (m_attrMap.empty())
-	{
-		initDeviceAttrMap(devInfoTab, sizeof(devInfoTab)/sizeof(devInfoTab[0]));
-	}
-}
-
-XiaomiGateway::~XiaomiGateway(void)
-{
-		std::cout<<"~XiaomiGateway"<<std::endl;
-}
 
 
 
@@ -326,8 +475,8 @@ bool XiaomiGateway::createWriteParam(const char * pdata, int length, WriteParam&
 {
 	if (pdata == nullptr)
 	{
-		std::cout<<"message ptr null"<<std::endl;
-		return false;	
+		_log.Log(LOG_ERROR, "message ptr null");
+		return false;
 	}
 	const tRBUF *pCmd = reinterpret_cast<const tRBUF *>(pdata);
 	unsigned char packetType = pCmd->ICMND.packettype;
@@ -353,11 +502,11 @@ bool XiaomiGateway::createWriteParam(const char * pdata, int length, WriteParam&
 		case pTypeMannageDevice:
 		{
 			ssid = TbGateway::idConvert(m_GatewaySID).first;
-			unit = 1;	
+			unit = 1;
 		}
 		break;
 		default:
-			std::cout<<"no support type on write"<<std::endl;
+			_log.Log(LOG_ERROR, "no support type on write");
 			return false;
 		break;
 	}
@@ -371,10 +520,15 @@ bool XiaomiGateway::createWriteParam(const char * pdata, int length, WriteParam&
 	param.miGateway = static_cast<void*>(this);
 
 	dev.reset();
-	dev =	XiaomiGateway::getDevice(ssid, 
-							static_cast<int>(packetType), 
-							static_cast<int>(subType), 
+	dev =	XiaomiGateway::getDevice(ssid,
+							static_cast<int>(packetType),
+							static_cast<int>(subType),
 							static_cast<int>(unit));
+	if (!dev)
+	{
+		_log.Log(LOG_ERROR, "no find want to write device");
+		return false;
+	}
 
 	if (packetType == pTypeMannageDevice)
 	{
@@ -394,6 +548,7 @@ bool XiaomiGateway::createWriteParam(const char * pdata, int length, WriteParam&
 
 		if (!rmDev)
 		{
+			_log.Log(LOG_ERROR, "no find want to delete");
 			return false;
 		}
 		param.rmMac = rmDev->getMac();
@@ -433,13 +588,13 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 		const tRBUF *xcmd = reinterpret_cast<const tRBUF *>(pdata);
 		if (xcmd->MANNAGE.cmnd == cmdRmDevice)
 		{
-			delDeviceFromMap(param.rmMac);	
+			delDeviceFromMap(param.rmMac);
 		}
 	}
 	return result;
 }
 
-bool XiaomiGateway::SendMessageToGateway(const std::string &controlmessage) {
+bool XiaomiGateway:: sendMessageToGateway(const std::string &controlmessage) {
 	std::string message = controlmessage;
 	bool result = true;
 	boost::asio::io_service io_service;
@@ -450,6 +605,7 @@ bool XiaomiGateway::SendMessageToGateway(const std::string &controlmessage) {
 	remote_endpoint_ = boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(m_GatewayIp), m_GatewayUPort);
 	socket_.send_to(boost::asio::buffer(*message1), remote_endpoint_);
 	sleep_milliseconds(50);
+
 	_log.Log(LOG_STATUS,  "send to GW :%s", message.c_str());
 #if 0
 	sleep_milliseconds(150);
@@ -489,6 +645,220 @@ bool XiaomiGateway::SendMessageToGateway(const std::string &controlmessage) {
 	socket_.close();
 	return result;
 }
+
+
+
+
+
+
+std::string XiaomiGateway::GetGatewayKey()
+{
+#ifdef WWW_ENABLE_SSL
+	const unsigned char *key = (unsigned char *)m_GatewayPassword.c_str();
+	unsigned char iv[AES_BLOCK_SIZE] = { 0x17, 0x99, 0x6d, 0x09, 0x3d, 0x28, 0xdd, 0xb3, 0xba, 0x69, 0x5a, 0x2e, 0x6f, 0x58, 0x56, 0x2e };
+	std::string token = XiaomiGatewayTokenManager::GetInstance().GetToken(m_GatewayIp);
+	unsigned char *plaintext = (unsigned char *)token.c_str();
+	unsigned char ciphertext[128];
+
+	AES_KEY encryption_key;
+	AES_set_encrypt_key(key, 128, &(encryption_key));
+	AES_cbc_encrypt((unsigned char *)plaintext, ciphertext, sizeof(plaintext) * 8, &encryption_key, iv, AES_ENCRYPT);
+
+	char gatewaykey[128];
+	for (int i = 0; i < 16; i++)
+	{
+		sprintf(&gatewaykey[i * 2], "%02X", ciphertext[i]);
+	}
+#ifdef _DEBUG
+	_log.Log(LOG_STATUS, "XiaomiGateway: GetGatewayKey Password - %s, token=%s", m_GatewayPassword.c_str(), token.c_str());
+	_log.Log(LOG_STATUS, "XiaomiGateway: GetGatewayKey key - %s", gatewaykey);
+#endif
+	return gatewaykey;
+#else
+	_log.Log(LOG_ERROR, "XiaomiGateway: GetGatewayKey NO SSL AVAILABLE");
+	return std::string("");
+#endif
+}
+
+unsigned int XiaomiGateway::GetShortID(const std::string & nodeid)
+{
+
+	if (nodeid.length() < 12) {
+		_log.Log(LOG_ERROR, "XiaomiGateway: Node ID %s is too short", nodeid.c_str());
+		return -1;
+	}
+	uint64_t sID = std::strtoull(nodeid.c_str(), NULL, 16);
+	std::cout<<"nodeid:"<<nodeid<<"-----sID:"<<sID<<std::endl;
+	return (sID & 0xffffffff);
+}
+
+void XiaomiGateway::deviceListHandler(Json::Value& root)
+{
+	std::string gwSid;
+	std::string token;
+	std::string sid;
+	std::string model;
+	std::string message;
+
+	gwSid = root["sid"].asString();
+	token = root["token"].asString();
+	if (!XiaomiGateway::getDevice(gwSid))
+	{
+		const DevAttr* attr = XiaomiGateway::findDevAttr(m_gwModel);
+		std::shared_ptr<Device> dev(new Device (gwSid, attr));
+		XiaomiGateway::addDeviceToMap(gwSid, dev);
+	}
+
+	XiaomiGatewayTokenManager::GetInstance().UpdateTokenSID(m_GatewayIp, token, gwSid);
+	SetDevInfoInited(true);
+
+	Json::Value list = root["dev_list"];
+	for (int ii = 0; ii < (int)list.size(); ii++)
+	{
+		sid = list[ii]["sid"].asString();
+		model = list[ii]["model"].asString();
+		if (sid == "" || model == "")
+		{
+			_log.Log(LOG_ERROR, "XiaomiGateway: dev_list sid or model not in json");
+			continue;
+		}
+
+		/* if support the device */
+		const DevAttr* attr = XiaomiGateway::findDevAttr(model);
+		if(nullptr == attr)
+		{
+			Json::Value del_cmd;
+			del_cmd["cmd"] = "write";
+			del_cmd["key"] = "@gatewaykey";
+			del_cmd["sid"] = gwSid;
+			del_cmd["params"][0]["remove_device"] = sid;
+			message = JSonToRawString (del_cmd);
+			std::shared_ptr<std::string> send_buff(new std::string(message));
+			sendMessageToGateway(message);
+			_log.Log(LOG_ERROR, "XiaomiGateway: not support the device model:%s  mac:%s", sid.c_str(), model.c_str());
+			continue;
+		}
+		/* if device exist */
+		if (!XiaomiGateway::getDevice(sid))
+		{
+			std::shared_ptr<Device> dev(new Device (sid, attr));
+			XiaomiGateway::addDeviceToMap(sid, dev);
+			createDtDevice(dev);
+		}
+
+		Json::Value read_cmd;
+		read_cmd["cmd"] = "read";
+		read_cmd["sid"] = sid;
+		message = JSonToRawString (read_cmd);
+		sendMessageToGateway(message);
+	}
+
+}
+
+void XiaomiGateway::joinGatewayHandler(Json::Value& root)
+{
+	std::string model = root["model"].asString();
+	std::string ip = root["ip"].asString();
+	std::string port =	root["port"].asString();
+
+	if (ip != getGatewayIp())
+	{
+		_log.Log(LOG_ERROR, "a new gateway incoming, but not in domoticz hardware list, ip:%s", ip.c_str());
+		return;
+	}
+	m_GatewayUPort = std::stoi(port);
+	m_gwModel = model;
+
+	std::string message = "{\"cmd\" : \"discovery\"}";
+	sendMessageToGateway(message);
+	_log.Log(LOG_STATUS, "Tenbat Gateway: RGB Gateway Detected");
+}
+
+static inline int customImage(int switchtype)
+{
+	int customimage = 0;
+	if (customimage == 0)
+	{
+		if (switchtype == static_cast<int>(STYPE_OnOff))
+		{
+			customimage = 1; //wall socket
+		}
+		else if (switchtype == static_cast<int>(STYPE_Selector))
+		{
+			customimage = 9;
+		}
+	}
+	return customimage;
+}
+
+bool XiaomiGateway::createDtDevice(std::shared_ptr<Device> dev)
+{
+
+	int ii;
+	int type, subType, switchType, uint, outlet;
+	unsigned int ssid;
+	uint64_t DeviceRowIdx = (uint64_t)-1;
+
+	std::string name = dev->getName();
+	std::string model = dev->getZigbeeModel();
+	std::string mac = dev->getMac();
+	auto outletAttr = dev->getOutlet();
+	auto ssidPair =  dev->getSsid();
+
+	std::string devID = "";
+	std::string devOpt = "";
+	std::string opts = "";
+
+	if (ssidPair.size() != outletAttr.size())
+	{
+		_log.Log(LOG_ERROR,  "outlet number(%lu) not equal ssid number(%lu)", ssidPair.size(), outletAttr.size());
+		return false;
+	}
+
+	std::cout<<name<<std::endl;
+	std::cout<<model<<std::endl;
+	std::cout<<mac<<std::endl;
+	std::cout<<name<<std::endl;
+
+	ii = 0;
+	for (const auto itt : outletAttr)
+	{
+		type = itt->getType();
+		subType = itt->getSubType();
+		switchType = itt->getSWType();
+		uint = itt->getUnit();
+		outlet = ii;
+		devOpt = itt->getOpts();
+		ssid = ssidPair[ii].first;
+		devID = ssidPair[ii].second;
+		ii++;
+		if(m_sql.DoesDeviceExist(m_HwdID, devID.c_str(), uint, type, subType) == true)
+		{
+			continue;
+		}
+		bool bPrevAcceptNewHardware = m_sql.m_bAcceptNewHardware;
+		m_sql.m_bAcceptNewHardware = true;
+		DeviceRowIdx = m_sql.CreateDevice(m_HwdID, type, subType, name, ssid, opts, uint);
+		m_sql.m_bAcceptNewHardware = bPrevAcceptNewHardware;
+
+		if (DeviceRowIdx == (uint64_t)-1)
+		{
+			_log.Log(LOG_ERROR,  "add new device failed model:%s, ssid:%08X", model.c_str(), ssid);
+			continue;
+		}
+		int cImage = customImage(switchType);
+		m_sql.safe_query("UPDATE DeviceStatus SET Outlet=%d, SwitchType=%d, CustomImage=%i, Model='%q', Mac='%q' WHERE (HardwareID == %d) AND (ID == %" PRIu64 ")", outlet, switchType, cImage,  model.c_str(), mac.c_str(), m_HwdID, DeviceRowIdx);
+		if (devOpt != "")
+		{
+			m_sql.SetDeviceOptions(DeviceRowIdx, m_sql.BuildDeviceOptions(devOpt, false));
+		}
+		_log.Log(LOG_STATUS,  "add new device successful model:%s, ssid:%08X", model.c_str(), ssid);
+	}
+
+	return true;
+}
+
+
 
 void XiaomiGateway::InsertUpdateTemperature(const std::string &nodeid, const std::string &Name, const float Temperature, const int battery)
 {
@@ -659,7 +1029,7 @@ void XiaomiGateway::InsertUpdateRGBLight(const std::string & NodeID,const unsign
 		}
 
 		nvalue = atoi(result[0][0].c_str());
-		lastLevel = atoi(result[0][1].c_str());	
+		lastLevel = atoi(result[0][1].c_str());
 		bright = (Brightness == "")? lastLevel : bright;
 
 		if (nvalue == gswitch_sOff)
@@ -672,7 +1042,7 @@ void XiaomiGateway::InsertUpdateRGBLight(const std::string & NodeID,const unsign
 		std::cout<<"nvalue:"<<nvalue<<"	 lastlevel:"<<lastLevel<<"  bright:"<<bright<<std::endl;;
 	}
 
-	
+
 }
 
 
@@ -934,379 +1304,10 @@ void XiaomiGateway::InsertUpdateKwh(const std::string & nodeid, const std::strin
 	}
 }
 
-bool XiaomiGateway::StartHardware()
-{
-	RequestStart();
-
-	m_bDoRestart = false;
-	m_bDevInfoInited = false;
-
-	//force connect the next first time
-	m_bIsStarted = true;
-
-	m_GatewayMusicId = "10000";
-	m_GatewayVolume = "20";
-
-	std::vector<std::vector<std::string> > result;
-	result = m_sql.safe_query("SELECT Password, Address FROM Hardware WHERE Type=%d AND ID=%d AND Enabled=1", HTYPE_XiaomiGateway, m_HwdID);
-
-	if (result.empty())
-		return false;
-
-	m_GatewayPassword = result[0][0].c_str();
-	m_GatewayIp = result[0][1].c_str();
-
-	m_GatewayRgbR = 255;
-	m_GatewayRgbG = 255;
-	m_GatewayRgbB = 255;
-	m_GatewayRgbCW = 255;
-	m_GatewayRgbWW = 255;
-	m_GatewayRgbCT = 255;
-	m_GatewayBrightnessInt = 100;
-
-	//check for presence of Xiaomi user variable to enable message output
-	m_OutputMessage = false;
-	result = m_sql.safe_query("SELECT Value FROM UserVariables WHERE (Name == 'XiaomiMessage')");
-	if (!result.empty()) {
-		m_OutputMessage = true;
-	}
-	//check for presence of Xiaomi user variable to enable additional voltage devices
-	m_IncludeVoltage = false;
-	result = m_sql.safe_query("SELECT Value FROM UserVariables WHERE (Name == 'XiaomiVoltage')");
-	if (!result.empty()) {
-		m_IncludeVoltage = true;
-	}
-	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Delaying worker startup...", m_HwdID);
-	sleep_seconds(5);
-
-	XiaomiGatewayTokenManager::GetInstance();
-
-	AddGatewayToList();
-
-	if (m_ListenPort9898)
-	{
-		_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Selected as main Gateway", m_HwdID);
-	}
-
-	//Start worker thread
-	m_thread = std::shared_ptr<std::thread>(new std::thread(&XiaomiGateway::Do_Work, this));
-	SetThreadNameInt(m_thread->native_handle());
-
-	return (m_thread != nullptr);
-}
-
-bool XiaomiGateway::StopHardware()
-{
-	if (m_thread)
-	{
-		RequestStop();
-		m_thread->join();
-		m_thread.reset();
-	}
-	m_bIsStarted = false;
-	return true;
-}
-
-void XiaomiGateway::Do_Work()
-{
-	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Worker started...", m_HwdID);
-	boost::asio::io_service io_service;
-	//find the local ip address that is similar to the xiaomi gateway
-	try {
-		boost::asio::ip::udp::resolver resolver(io_service);
-		boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), m_GatewayIp, "");
-		boost::asio::ip::udp::resolver::iterator endpoints = resolver.resolve(query);
-		boost::asio::ip::udp::endpoint ep = *endpoints;
-		boost::asio::ip::udp::socket socket(io_service);
-		socket.connect(ep);
-		boost::asio::ip::address addr = socket.local_endpoint().address();
-		std::string compareIp = m_GatewayIp.substr(0, (m_GatewayIp.length() - 3));
-		std::size_t found = addr.to_string().find(compareIp);
-		if (found != std::string::npos) {
-			m_LocalIp = addr.to_string();
-			_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Using %s for local IP address.", m_HwdID, m_LocalIp.c_str());
-		}
-	}
-	catch (std::exception& e) {
-		_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Could not detect local IP address using Boost.Asio: %s", m_HwdID, e.what());
-	}
-
-	// try finding local ip using ifaddrs when Boost.Asio fails
-	if (m_LocalIp == "") {
-		try {
-			// get first 2 octets of Xiaomi gateway ip to search for similar ip address
-			std::string compareIp = m_GatewayIp.substr(0, (m_GatewayIp.length() - 3));
-			_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): XiaomiGateway IP address starts with: %s", m_HwdID, compareIp.c_str());
-
-			std::vector<std::string> ip_addrs;
-			if (XiaomiGateway::get_local_ipaddr(ip_addrs) > 0)
-			{
-				for (const std::string &addr : ip_addrs)
-				{
-					std::size_t found = addr.find(compareIp);
-					if (found != std::string::npos)
-					{
-						m_LocalIp = addr;
-						_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Using %s for local IP address.", m_HwdID, m_LocalIp.c_str());
-						break;
-					}
-				}
-			}
-			else
-			{
-				_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Could not find local IP address with ifaddrs", m_HwdID);
-			}
-		}
-		catch (std::exception& e) {
-			_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Could not find local IP address with ifaddrs: %s", m_HwdID, e.what());
-		}
-	}
-
-	XiaomiGateway::xiaomi_udp_server udp_server(io_service, m_HwdID, m_GatewayIp, m_LocalIp, m_ListenPort9898, m_OutputMessage, m_IncludeVoltage, this);
-	boost::thread bt;
-	boost::thread bt2;
-	if (m_ListenPort9898) {
-		bt = boost::thread(boost::bind(&boost::asio::io_service::run, &io_service));
-		SetThreadName(bt.native_handle(), "XiaomiGatewayIO");
-
-		bt2 = boost::thread(boost::bind(&XiaomiGateway::xiaomi_udp_server::whois, &udp_server));
-		SetThreadName(bt2.native_handle(), "XiaomiGatewayWhois");
-	}
-
-	int sec_counter = 0;
-	while (!IsStopRequested(1000))
-	{
-		sec_counter++;
-		if (sec_counter % 12 == 0) {
-			m_LastHeartbeat = mytime(NULL);
-		}
-		if (sec_counter % 60 == 0)
-		{
-			//_log.Log(LOG_STATUS, "sec_counter %d", sec_counter);
-		}
-	}
-
-	bt2.interrupt();
-	bt2.join();
-	io_service.stop();
-	RemoveFromGatewayList();
-	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): stopped", m_HwdID);
-}
-
-std::string XiaomiGateway::GetGatewayKey()
-{
-#ifdef WWW_ENABLE_SSL
-	const unsigned char *key = (unsigned char *)m_GatewayPassword.c_str();
-	unsigned char iv[AES_BLOCK_SIZE] = { 0x17, 0x99, 0x6d, 0x09, 0x3d, 0x28, 0xdd, 0xb3, 0xba, 0x69, 0x5a, 0x2e, 0x6f, 0x58, 0x56, 0x2e };
-	std::string token = XiaomiGatewayTokenManager::GetInstance().GetToken(m_GatewayIp);
-	unsigned char *plaintext = (unsigned char *)token.c_str();
-	unsigned char ciphertext[128];
-
-	AES_KEY encryption_key;
-	AES_set_encrypt_key(key, 128, &(encryption_key));
-	AES_cbc_encrypt((unsigned char *)plaintext, ciphertext, sizeof(plaintext) * 8, &encryption_key, iv, AES_ENCRYPT);
-
-	char gatewaykey[128];
-	for (int i = 0; i < 16; i++)
-	{
-		sprintf(&gatewaykey[i * 2], "%02X", ciphertext[i]);
-	}
-#ifdef _DEBUG
-	_log.Log(LOG_STATUS, "XiaomiGateway: GetGatewayKey Password - %s, token=%s", m_GatewayPassword.c_str(), token.c_str());
-	_log.Log(LOG_STATUS, "XiaomiGateway: GetGatewayKey key - %s", gatewaykey);
-#endif
-	return gatewaykey;
-#else
-	_log.Log(LOG_ERROR, "XiaomiGateway: GetGatewayKey NO SSL AVAILABLE");
-	return std::string("");
-#endif
-}
-
-unsigned int XiaomiGateway::GetShortID(const std::string & nodeid)
-{
-
-	if (nodeid.length() < 12) {
-		_log.Log(LOG_ERROR, "XiaomiGateway: Node ID %s is too short", nodeid.c_str());
-		return -1;
-	}
-	uint64_t sID = std::strtoull(nodeid.c_str(), NULL, 16);
-	std::cout<<"nodeid:"<<nodeid<<"-----sID:"<<sID<<std::endl;
-	return (sID & 0xffffffff);
-}
-
-void XiaomiGateway::deviceListHandler(Json::Value& root)
-{
-	std::string gwSid;
-	std::string token;
-	std::string sid;
-	std::string model;
-	std::string message;
-
-	gwSid = root["sid"].asString();
-	token = root["token"].asString();
-	model = root["model"].asString();
-	if (!XiaomiGateway::getDevice(gwSid))
-	{
-		const DevAttr* attr = XiaomiGateway::findDevAttr(model);
-		std::shared_ptr<Device> dev(new Device (gwSid, attr)); 
-		XiaomiGateway::addDeviceToMap(gwSid, dev);			
-	}
-
-	XiaomiGatewayTokenManager::GetInstance().UpdateTokenSID(m_GatewayIp, token, gwSid);
-	SetDevInfoInited(true);
-
-	Json::Value list = root["dev_list"];
-	for (int ii = 0; ii < (int)list.size(); ii++)
-	{
-		sid = list[ii]["sid"].asString();
-		model = list[ii]["model"].asString();
-		if (sid == "" || model == "")
-		{
-			_log.Log(LOG_ERROR, "XiaomiGateway: dev_list sid or model not in json");
-			continue;
-		}
-
-		/* if support the device */
-		const DevAttr* attr = XiaomiGateway::findDevAttr(model);
-		if(nullptr == attr)
-		{
-			Json::Value del_cmd;
-			del_cmd["cmd"] = "write";
-			del_cmd["key"] = "@gatewaykey";
-			del_cmd["sid"] = gwSid;
-			del_cmd["params"][0]["remove_device"] = sid;
-			message = JSonToRawString (del_cmd);
-			std::shared_ptr<std::string> send_buff(new std::string(message));
-			SendMessageToGateway(message);
-			_log.Log(LOG_ERROR, "XiaomiGateway: not support the device model:%s  mac:%s", sid.c_str(), model.c_str());
-			continue;
-		}
-		/* if device exist */
-		if (!XiaomiGateway::getDevice(sid))
-		{
-			std::shared_ptr<Device> dev(new Device (sid, attr)); 
-			XiaomiGateway::addDeviceToMap(sid, dev);
-			createDtDevice(dev);
-		}
-
-		Json::Value read_cmd;
-		read_cmd["cmd"] = "read";
-		read_cmd["sid"] = sid;
-		message = JSonToRawString (read_cmd);
-		SendMessageToGateway(message);
-	}
-
-}
-
-void XiaomiGateway::joinGatewayHandler(Json::Value& root)
-{
-	std::string sid = root["sid"].asString();
-	std::string model = root["model"].asString();
-	std::string ip = root["ip"].asString();
-	std::string port =	root["port"].asString();
-
-	if (ip != GetGatewayIp())
-	{
-		_log.Log(LOG_ERROR, "a new gateway incoming, but not in domoticz hardware list, ip:%s", ip.c_str());
-		return;
-	}
-	m_GatewayUPort = std::stoi(port);
-
-	if (!XiaomiGateway::getDevice(sid))
-	{
-		const DevAttr* attr = XiaomiGateway::findDevAttr(model);
-		std::shared_ptr<Device> dev(new Device (sid, attr)); 
-		XiaomiGateway::addDeviceToMap(sid, dev);
-	}
-
-	std::string message = "{\"cmd\" : \"discovery\"}";
-	SendMessageToGateway(message);
-	_log.Log(LOG_STATUS, "Tenbat Gateway: RGB Gateway Detected");
-}
-static inline int customImage(int switchtype)
-{
-	int customimage = 0;
-	if (customimage == 0)
-	{
-		if (switchtype == static_cast<int>(STYPE_OnOff))
-		{
-			customimage = 1; //wall socket
-		}
-		else if (switchtype == static_cast<int>(STYPE_Selector))
-		{
-			customimage = 9;
-		}
-	}
-	return customimage;
-}
 
 
-bool XiaomiGateway::createDtDevice(std::shared_ptr<Device> dev)
-{
 
-	int ii;
-	int type, subType, switchType, uint, outlet;
-	unsigned int ssid;
-	uint64_t DeviceRowIdx = (uint64_t)-1;
 
-	std::string name = dev->getName();
-	std::string model = dev->getZigbeeModel();
-	std::string mac = dev->getMac();
-	auto outletAttr = dev->getOutlet();
-	auto ssidPair =  dev->getSsid();
-
-	std::string devID = "";
-	std::string devOpt = "";
-	std::string opts = "";
-
-	if (ssidPair.size() != outletAttr.size())
-	{		
-		_log.Log(LOG_ERROR,  "outlet number(%lu) not equal ssid number(%lu)", ssidPair.size(), outletAttr.size());
-		return false;
-	}
-
-	std::cout<<name<<std::endl;
-	std::cout<<model<<std::endl;
-	std::cout<<mac<<std::endl;
-	std::cout<<name<<std::endl;
-	
-	ii = 0;
-	for (const auto itt : outletAttr)
-	{
-		type = itt->getType();
-		subType = itt->getSubType();
-		switchType = itt->getSWType();
-		uint = itt->getUnit();
-		outlet = ii;
-		devOpt = itt->getOpts();
-		ssid = ssidPair[ii].first;
-		devID = ssidPair[ii].second;
-		ii++;
-		if(m_sql.DoesDeviceExist(m_HwdID, devID.c_str(), uint, type, subType) == true)
-		{
-			continue;
-		}
-		bool bPrevAcceptNewHardware = m_sql.m_bAcceptNewHardware;
-		m_sql.m_bAcceptNewHardware = true;
-		DeviceRowIdx = m_sql.CreateDevice(m_HwdID, type, subType, name, ssid, opts, uint);
-		m_sql.m_bAcceptNewHardware = bPrevAcceptNewHardware;
-
-		if (DeviceRowIdx == (uint64_t)-1)
-		{
-			_log.Log(LOG_ERROR,  "add new device failed model:%s, ssid:%08X", model.c_str(), ssid);
-			continue;
-		}
-		int cImage = customImage(switchType);
-		m_sql.safe_query("UPDATE DeviceStatus SET Outlet=%d, SwitchType=%d, CustomImage=%i, Model='%q', Mac='%q' WHERE (HardwareID == %d) AND (ID == %" PRIu64 ")", outlet, switchType, cImage,  model.c_str(), mac.c_str(), m_HwdID, DeviceRowIdx);
-		if (devOpt != "")
-		{
-			m_sql.SetDeviceOptions(DeviceRowIdx, m_sql.BuildDeviceOptions(devOpt, false));
-		}
-		_log.Log(LOG_STATUS,  "add new device successful model:%s, ssid:%08X", model.c_str(), ssid);
-	}
-
-	return true;
-}
 
 
 
@@ -1387,7 +1388,7 @@ void XiaomiGateway::xiaomi_udp_server::whois(void)
 		sec_counter++;
 		if (sec_counter % 3 == 0)
 		{
-			XiaomiGateway * TrueGateway = m_XiaomiGateway->GatewayByIp(m_gatewayip);
+			XiaomiGateway * TrueGateway = m_XiaomiGateway->getGatewayByIp(m_gatewayip);
 
 			if (!TrueGateway)
 			{
@@ -1426,7 +1427,7 @@ void XiaomiGateway::xiaomi_udp_server::handle_receive(const boost::system::error
 
 	std::string remoteAddr = remote_endpoint_.address().to_v4().to_string();
 
-	XiaomiGateway * TrueGateway = m_XiaomiGateway->GatewayByIp(remoteAddr);
+	XiaomiGateway * TrueGateway = m_XiaomiGateway->getGatewayByIp(remoteAddr);
 	if (!TrueGateway)
 	{
 		_log.Log(LOG_ERROR, "XiaomiGateway: received data from  unregisted gateway ip:%s!", remoteAddr.c_str());

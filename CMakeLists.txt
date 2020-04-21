@@ -491,11 +491,12 @@ hardware/VolcraftCO20.cpp
 hardware/Winddelen.cpp
 hardware/WOL.cpp
 hardware/Wunderground.cpp
+hardware/XiaomiGateway.cpp
 hardware/Xiaomi/DevAttr.cpp
 hardware/Xiaomi/Device.cpp
 hardware/Xiaomi/Outlet.cpp
 hardware/Xiaomi/Override.cpp
-hardware/XiaomiGateway.cpp
+#hardware/Xiaomi/OutletChild.cpp
 hardware/Yeelight.cpp
 hardware/YouLess.cpp
 hardware/ZiBlueBase.cpp

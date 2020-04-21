@@ -829,7 +829,7 @@ void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Unit,
 	{
 		lcmd.command = Color_LedOn;
 	}
-	
+
 	lcmd.dunit = Unit;
 	lcmd.value = (uint32_t)level;
 

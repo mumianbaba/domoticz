@@ -223,7 +223,8 @@ static const DevInfo  devInfoTab[] {
 	},
 	{
 		name : "Feibit Door Sensor",
-		zigbeeModel : "FNB54-DOS09ML0.7",
+		//zigbeeModel : "FNB54-DOS09ML0.7",
+		zigbeeModel : "FNB54-DOS09ML",
 		model : "NDOS109W-N1",
 		vendor : "feibit",
 		outlet : {&SensorContact}
@@ -238,7 +239,8 @@ static const DevInfo  devInfoTab[] {
 	},
 	{
 		name : "Feibit Water Sensor",
-		zigbeeModel : "FNB54-WTS08ML1.0",
+		//zigbeeModel : "FNB54-WTS08ML1.0",
+		zigbeeModel : "FNB54-WTS08ML",
 		model : "NWTS108W-N1",
 		vendor : "feibit",
 		outlet : {&SensorWLeak}
@@ -246,7 +248,8 @@ static const DevInfo  devInfoTab[] {
 	/* gas sensor */
 	{
 		name : "Feibit GAS Sensor",
-		zigbeeModel : "FNB54-GAS07ML0.8",
+		//zigbeeModel : "FNB54-GAS07ML0.8",
+		zigbeeModel : "FNB54-GAS07ML",
 		model : "NGAS107W-N1",
 		vendor : "feibit",
 		outlet : {&SensorGas}
@@ -254,7 +257,8 @@ static const DevInfo  devInfoTab[] {
 	/* smoke sensor */
 	{
 		name : "Feibit Smoke Sensor",
-		zigbeeModel : "FNB54-SMF0AML0.9",
+		//zigbeeModel : "FNB54-SMF0AML0.9",
+		zigbeeModel : "FNB54-SMF0AML",
 		model : "NSMF10AW-N1",
 		vendor : "feibit",
 		outlet : {&SensorSmoke}
@@ -276,7 +280,8 @@ static const DevInfo  devInfoTab[] {
 	},
 	{
 		name : "Feibit Motion Sensor",
-		zigbeeModel : "FNB54-BOT0AML0.9",
+		//zigbeeModel : "FNB54-BOT0AML0.9",
+		zigbeeModel : "FNB54-BOT0AML",
 		model : "NTHM217W-N1",
 		vendor : "feibit",
 		outlet : {&SensorMotion}
@@ -356,7 +361,8 @@ static const DevInfo  devInfoTab[] {
 	},
 	{
 		name : "Feibit Temp Sensor",
-		zigbeeModel : "FNB54-THM17ML1.1",
+		//zigbeeModel : "FNB54-THM17ML1.1",
+		zigbeeModel : "FNB54-THM17ML",
 		model : "NTHM217W-N1",
 		vendor : "feibit",
 		outlet : {&weatherTH}

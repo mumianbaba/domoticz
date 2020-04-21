@@ -2457,13 +2457,14 @@ namespace http {
 					{
 						if (!client.empty() && client != "web") {
 							std::vector<std::vector<std::string> > result2;
-							result2 = m_sql.safe_query("SELECT Mac, Outlet FROM DeviceStatus WHERE (ID=='%q')",
+							result2 = m_sql.safe_query("SELECT Mac, Outlet, Model FROM DeviceStatus WHERE (ID=='%q')",
 								DevSceneRowID.c_str());
 							if (result2.empty()) {
 								continue;
 							}
 
 							std::string sMac = result2[0][0];
+							std::string sModel = result2[0][2];
 							int nOutlet = atoi(result2[0][1].c_str());
 							Json::Value device;
 							device["idx"] = ID;
@@ -2473,6 +2474,7 @@ namespace http {
 							device["order"] = sd[3];
 							device["Name"] = Name;
 							device["Mac"] = sMac;
+							device["Model"] = sModel;
 							device["Outlet"] = nOutlet;
 
 							if (root["result"].isMember(sMac)) {
@@ -11914,7 +11916,7 @@ namespace http {
 
 					std::string Name = sd[1];
 					bool bIsHidden = (Name[0] == '$');
-
+					int jj = 0;
 					if ((bDisplayHidden) || (!bIsHidden))
 					{
 						root["result"][ii]["idx"] = sd[0];
@@ -11922,12 +11924,34 @@ namespace http {
 						root["result"][ii]["Order"] = sd[2];
 
 						unsigned int totDevices = 0;
-
-						result2 = m_sql.safe_query("SELECT COUNT(*) FROM DeviceToPlansMap WHERE (PlanID=='%q')",
+						result2 = m_sql.safe_query("SELECT DeviceRowID FROM DeviceToPlansMap WHERE (PlanID=='%q')",
 							sd[0].c_str());
 						if (!result2.empty())
 						{
-							totDevices = (unsigned int)atoi(result2[0][0].c_str());
+							std::set<std::string> strSet;
+							for (const auto & itt : result2)
+							{
+								strSet.emplace(itt[0]);
+							}
+							std::cout<<"1----idx:"<<boost::join(strSet, ",")<<std::endl;
+							auto macVectot = m_sql.safe_query("SELECT Mac FROM DeviceStatus WHERE ID IN(%q)", boost::join(strSet, ",").c_str());
+
+							strSet.clear();
+							for (const auto & itt : macVectot)
+							{
+								strSet.emplace(itt[0]);
+							}
+							std::cout<<"2----idx:"<<boost::join(strSet, ",")<<std::endl;
+							for (const auto & itt : strSet)
+							{
+								root["result"][ii]["MacList"][jj] = itt;
+								jj++;
+							}
+							totDevices = strSet.size();
+						}
+						if (jj == 0)
+						{
+							root["result"][ii]["MacList"][0];
 						}
 						root["result"][ii]["Devices"] = totDevices;
 

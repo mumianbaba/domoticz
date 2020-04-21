@@ -11,7 +11,7 @@
 
 namespace XiaoMi{
 
-class XiaomiGateway;
+
 
 
 

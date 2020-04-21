@@ -64,17 +64,14 @@ bool  Device::writeTo(WriteParam& param)
 	int unit = param.unit;
 
 	param.mac = getMac();
-	param.model = getModel();
+	param.model = getZigbeeModel();
 
 	bool res = false;
-	auto Outlet = m_devAttr->getOutlet();
+	auto Outlet = getOutlet();
 	for (const auto & itt : Outlet)
 	{
 		if (itt->match(type, subtype, unit) == true)
 		{
-			std::string mac = m_devID.getMac();
-			std::string model = m_devAttr->getZigbeeModel();
-			
 			res = itt->writeTo(param);
 			break;
 		}

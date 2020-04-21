@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "DomoticzHardware.h"
 #include <boost/tuple/tuple.hpp>
+#include <boost/asio.hpp>
 #include <list>
 #include <mutex>
 #include <map>
@@ -10,7 +11,6 @@
 #include <iostream>
 #include <string>
 
-#include "Xiaomi/Outlet.hpp"
 #include "Xiaomi/DevAttr.hpp"
 #include "Xiaomi/Device.hpp"
 
@@ -34,10 +34,23 @@ public:
 	~XiaomiGateway(void);
 
 	bool WriteToHardware(const char *pdata, const unsigned char length) override;
+	bool StartHardware() override;
+	bool StopHardware() override;
+
+public:
+	XiaomiGateway* getGatewayByIp( std::string ip );
+	void addGatewayToList();
+	void rmFromGatewayList();
+
+	static std::list<XiaomiGateway*> m_gwList;
+	static std::mutex m_gwListMutex;
+
+public:
+
 	bool createWriteParam(const char * pdata, int length, WriteParam& param, std::shared_ptr <Device>& dev);
 
 	int GetGatewayHardwareID(){ return m_HwdID; };
-	std::string GetGatewayIp(){ return m_GatewayIp; };
+	std::string getGatewayIp(){ return m_GatewayIp; };
 	std::string GetGatewaySid(){ if (m_GatewaySID == "") m_GatewaySID = XiaomiGatewayTokenManager::GetInstance().GetSID(m_GatewayIp); return m_GatewaySID; };
 
 	bool IsMainGateway(){ return m_ListenPort9898; };
@@ -69,11 +82,10 @@ private:
 	static DeviceMap m_deviceMap;
 
 public:
-	bool StartHardware() override;
-	bool StopHardware() override;
+
 	void Do_Work();
 
-	bool SendMessageToGateway(const std::string &controlmessage);
+	bool sendMessageToGateway(const std::string &controlmessage);
 	void InsertUpdateSwitch(const std::string &nodeid, const std::string &Name, const bool bIsOn, const _eSwitchType switchtype, const int unittype, const int level, const std::string &messagetype, const std::string &load_power, const std::string &power_consumed, const int battery);
 	void InsertUpdateRGBLight(const std::string & nodeid, const std::string & Name, const unsigned char SubType, const unsigned char Mode, const std::string& Color, const std::string& Brightness, const bool bIsWhite,  const int battery);
 	void InsertUpdateRGBLight(const std::string & NodeID,const unsigned char Unit, const unsigned char SubType,const int OnOff, const std::string& Brightness, const _tColor&  Color, const int battery);
@@ -111,6 +123,7 @@ public:
 	uint8_t m_GatewayRgbCT;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
 	uint8_t m_GatewayBrightnessInt; //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
 	std::string m_GatewaySID;
+	std::string m_gwModel;
 	std::string m_GatewayIp;
 	int m_GatewayUPort;
 	std::string m_LocalIp;
@@ -118,12 +131,8 @@ public:
 	std::string m_GatewayMusicId;
 	std::string m_GatewayVolume;
 	std::mutex m_mutex;
-	
-	XiaomiGateway * GatewayByIp( std::string ip );
-	void AddGatewayToList();
-	void RemoveFromGatewayList();
 
-	int get_local_ipaddr(std::vector<std::string>& ip_addrs);
+	int getLocalIpAddr(std::vector<std::string>& ip_addrs);
 	
 	class xiaomi_udp_server
 	{
