@@ -892,7 +892,7 @@ bool LedOutlet::writeTo(const WriteParam&  param) const
 		unsigned int bright = (unsigned int)xcmd->value; 
 		bright = (bright > 100)? 100 : bright;
 		root["params"][0]["light_level"] = bright;
-		root["params"][1]["power_status"] = "on";
+		//root["params"][1]["power_status"] = "on";
 		commit = true;
 	}
 

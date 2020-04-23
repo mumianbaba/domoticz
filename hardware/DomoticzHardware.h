@@ -96,7 +96,6 @@ protected:
 	void SendSwitchUnchecked(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const bool bOn, const double Level, const std::string &defaultname, const int RssiLevel = 12);
 	void SendSwitch(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const bool bOn, const double Level, const std::string &defaultname, const int RssiLevel = 12);
 	void SendSwitchIfNotExists(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const bool bOn, const double Level, const std::string &defaultname);
-	void SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const uint8_t mode , const int value, const int brightness, const int cmd, const int BatteryLevel, const std::string& defaultname);
 	void SendRGBWSwitch(const int NodeID, const uint8_t Unit, const uint8_t SubType, const int OnOff, const int Level, const _tColor color, const int BatteryLevel);
 	void SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const int Level, const bool bIsRGBW, const std::string &defaultname);
 	void SendGeneralSwitch(const int NodeID, const int ChildID, const int BatteryLevel, const uint8_t SwitchState, const uint8_t Level, const std::string &defaultname, const int RssiLevel = 12);

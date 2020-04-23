@@ -6692,7 +6692,6 @@ namespace http {
 				}
 
 				std::string idx = request::findValue(&req, "idx");
-
 				if (idx.empty())
 					return;
 
@@ -13974,12 +13973,10 @@ namespace http {
 			{
 				idx = std::strtoull(sIdx.c_str(), nullptr, 10);
 			}
-
 			std::vector<std::vector<std::string> > result;
 			//First get Device Type/SubType
 			result = m_sql.safe_query("SELECT Type, SubType, SwitchType, Options FROM DeviceStatus WHERE (ID == %" PRIu64 ")",
-					idx);
-
+				idx);
 			if (result.empty())
 				return;
 
@@ -14022,7 +14019,6 @@ namespace http {
 			root["title"] = "LightLog";
 
 			result = m_sql.safe_query("SELECT ROWID, nValue, sValue, User, Date FROM LightingLog WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date DESC %q", idx, sSql.c_str());
-
 			if (!result.empty())
 			{
 				std::map<std::string, std::string> selectorStatuses;
@@ -14153,7 +14149,6 @@ namespace http {
 			{
 				idx = std::strtoull(sIdx.c_str(), nullptr, 10);
 			}
-
 			std::vector<std::vector<std::string> > result;
 
 			root["status"] = "OK";
@@ -14168,6 +14163,7 @@ namespace http {
 				for (const auto & itt : result)
 				{
 					std::vector<std::string> sd = itt;
+
 					root["result"][ii]["idx"] = sd[0];
 					root["result"][ii]["Data"] = sd[1];
 					root["result"][ii]["User"] = sd[2];
@@ -14184,7 +14180,6 @@ namespace http {
 			{
 				idx = std::strtoull(request::findValue(&req, "idx").c_str(), nullptr, 10);
 			}
-
 			std::vector<std::vector<std::string> > result;
 
 			root["status"] = "OK";
@@ -14244,7 +14239,6 @@ namespace http {
 
 			result = m_sql.safe_query("SELECT Type, SubType, SwitchType, AddjValue, AddjMulti, AddjValue2, Options FROM DeviceStatus WHERE (ID == %" PRIu64 ")",
 					idx);
-
 			if (result.empty())
 				return;
 

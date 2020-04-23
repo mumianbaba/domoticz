@@ -112,38 +112,24 @@ bool XiaomiGateway::StartHardware()
 	//force connect the next first time
 	m_bIsStarted = true;
 
-	m_GatewayMusicId = "10000";
-	m_GatewayVolume = "20";
-
 	std::vector<std::vector<std::string> > result;
 	result = m_sql.safe_query("SELECT Password, Address FROM Hardware WHERE Type=%d AND ID=%d AND Enabled=1", HTYPE_XiaomiGateway, m_HwdID);
-
 	if (result.empty())
+	{
+		_log.Log(LOG_ERROR, "No find the hardware(type:%d, id=%d)", HTYPE_XiaomiGateway, m_HwdID);
 		return false;
-
+	}
 	m_GatewayPassword = result[0][0].c_str();
 	m_GatewayIp = result[0][1].c_str();
 
-	m_GatewayRgbR = 255;
-	m_GatewayRgbG = 255;
-	m_GatewayRgbB = 255;
-	m_GatewayRgbCW = 255;
-	m_GatewayRgbWW = 255;
-	m_GatewayRgbCT = 255;
-	m_GatewayBrightnessInt = 100;
 
-	//check for presence of Xiaomi user variable to enable message output
 	m_OutputMessage = false;
 	result = m_sql.safe_query("SELECT Value FROM UserVariables WHERE (Name == 'XiaomiMessage')");
-	if (!result.empty()) {
+	if (!result.empty()) 
+	{
 		m_OutputMessage = true;
 	}
-	//check for presence of Xiaomi user variable to enable additional voltage devices
-	m_IncludeVoltage = false;
-	result = m_sql.safe_query("SELECT Value FROM UserVariables WHERE (Name == 'XiaomiVoltage')");
-	if (!result.empty()) {
-		m_IncludeVoltage = true;
-	}
+
 	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Delaying worker startup...", m_HwdID);
 	sleep_seconds(5);
 
@@ -156,7 +142,6 @@ bool XiaomiGateway::StartHardware()
 		_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Selected as main Gateway", m_HwdID);
 	}
 
-	//Start worker thread
 	m_thread = std::shared_ptr<std::thread>(new std::thread(&XiaomiGateway::Do_Work, this));
 	SetThreadNameInt(m_thread->native_handle());
 
@@ -197,29 +182,29 @@ int XiaomiGateway::getLocalIpAddr(std::vector<std::string>& ip_addrs)
 
 	for (ifa = myaddrs; ifa != NULL; ifa = ifa->ifa_next)
 	{
-		if (ifa->ifa_addr == NULL)
+		if (ifa->ifa_addr == NULL  || !(ifa->ifa_flags & IFF_UP))
+		{
 			continue;
-		if (!(ifa->ifa_flags & IFF_UP))
-			continue;
+		}
 
 		switch (ifa->ifa_addr->sa_family)
 		{
-		case AF_INET:
-		{
-			struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_addr;
-			in_addr = &s4->sin_addr;
-			break;
-		}
+			case AF_INET:
+			{
+				struct sockaddr_in *s4 = (struct sockaddr_in *)ifa->ifa_addr;
+				in_addr = &s4->sin_addr;
+				break;
+			}
 
-		case AF_INET6:
-		{
-			struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)ifa->ifa_addr;
-			in_addr = &s6->sin6_addr;
-			break;
-		}
+			case AF_INET6:
+			{
+				struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)ifa->ifa_addr;
+				in_addr = &s6->sin6_addr;
+				break;
+			}
 
-		default:
-			continue;
+			default:
+				continue;
 		}
 
 		if (!inet_ntop(ifa->ifa_addr->sa_family, in_addr, buf, sizeof(buf)))
@@ -243,7 +228,8 @@ void XiaomiGateway::Do_Work()
 	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Worker started...", m_HwdID);
 	boost::asio::io_service io_service;
 	//find the local ip address that is similar to the xiaomi gateway
-	try {
+	try 
+	{
 		boost::asio::ip::udp::resolver resolver(io_service);
 		boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), m_GatewayIp, "");
 		boost::asio::ip::udp::resolver::iterator endpoints = resolver.resolve(query);
@@ -253,18 +239,22 @@ void XiaomiGateway::Do_Work()
 		boost::asio::ip::address addr = socket.local_endpoint().address();
 		std::string compareIp = m_GatewayIp.substr(0, (m_GatewayIp.length() - 3));
 		std::size_t found = addr.to_string().find(compareIp);
-		if (found != std::string::npos) {
+		if (found != std::string::npos) 
+		{
 			m_LocalIp = addr.to_string();
 			_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Using %s for local IP address.", m_HwdID, m_LocalIp.c_str());
 		}
 	}
-	catch (std::exception& e) {
-		_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Could not detect local IP address using Boost.Asio: %s", m_HwdID, e.what());
+	catch (std::exception& e) 
+	{
+		_log.Log(LOG_ERROR, "XiaomiGateway (ID=%d): Could not detect local IP address using Boost.Asio: %s", m_HwdID, e.what());
 	}
 
 	// try finding local ip using ifaddrs when Boost.Asio fails
-	if (m_LocalIp == "") {
-		try {
+	if (m_LocalIp == "")
+	{
+		try 
+		{
 			// get first 2 octets of Xiaomi gateway ip to search for similar ip address
 			std::string compareIp = m_GatewayIp.substr(0, (m_GatewayIp.length() - 3));
 			_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): XiaomiGateway IP address starts with: %s", m_HwdID, compareIp.c_str());
@@ -288,15 +278,18 @@ void XiaomiGateway::Do_Work()
 				_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Could not find local IP address with ifaddrs", m_HwdID);
 			}
 		}
-		catch (std::exception& e) {
+
+		catch (std::exception& e) 
+		{
 			_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Could not find local IP address with ifaddrs: %s", m_HwdID, e.what());
 		}
 	}
 
-	XiaomiGateway::xiaomi_udp_server udp_server(io_service, m_HwdID, m_GatewayIp, m_LocalIp, m_ListenPort9898, m_OutputMessage, m_IncludeVoltage, this);
+	XiaomiGateway::xiaomi_udp_server udp_server(io_service, m_HwdID, m_GatewayIp, m_LocalIp, m_ListenPort9898, m_OutputMessage, false, this);
 	boost::thread bt;
 	boost::thread bt2;
-	if (m_ListenPort9898) {
+	if (m_ListenPort9898)
+	{
 		bt = boost::thread(boost::bind(&boost::asio::io_service::run, &io_service));
 		SetThreadName(bt.native_handle(), "XiaomiGatewayIO");
 
@@ -1320,7 +1313,7 @@ XiaomiGateway::xiaomi_udp_server::xiaomi_udp_server(boost::asio::io_service& io_
 	m_gatewayip = gatewayIp;
 	m_localip = localIp;
 	m_OutputMessage = outputMessage;
-	m_IncludeVoltage = includeVoltage;
+
 	if (listenPort9898) {
 		try {
 			socket_.set_option(boost::asio::ip::udp::socket::reuse_address(true));

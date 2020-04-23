@@ -725,63 +725,6 @@ void CDomoticzHardwareBase::SendBlindSensor(const uint8_t NodeID, const uint8_t 
 	sDecodeRXMessage(this, (const unsigned char*)& lcmd.BLINDS1, defaultname.c_str(), BatteryLevel);
 }
 
-
-void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const uint8_t SubType, const uint8_t mode , const int value, const int brightness, const int cmd, const int BatteryLevel, const std::string& defaultname)
-{
-	uint8_t subType = SubType;
-	if (SubType < sTypeColor_RGB_W || SubType > sTypeColor_CW_WW)
-	{
-		subType = sTypeColor_RGB_W;
-	}
-
-	uint8_t r = 0;
-	uint8_t g = 0;
-	uint8_t b = 0;
-	uint8_t cw = 0;
-	uint8_t ww = 0;
-	_tColor color;
-	int   ival = brightness;
-
-
-	//Send as ColorSwitch
-	_tColorSwitch lcmd;
-
-	lcmd.command = cmd;
-	switch(mode)
-	{
-		case ColorModeWhite:
-		case ColorModeTemp:
-		{
-			//color = _tColor((unsigned char)(value & 0xff), (ColorMode)mode);
-		}
-		break;
-		case ColorModeRGB:
-		{
-			//r = (uint8_t)(value>>16 & 0xff);
-			//g = (uint8_t)(value>>8 & 0xff);
-			//b = (uint8_t)value & 0xff;
-			//color = _tColor(r, g, b, cw, ww, ColorModeRGB);
-		}
-		break;
-		case ColorModeCustom:
-		{
-
-		}
-		break;
-	}
-
-	ival = std::max(ival, 0);
-	ival = std::min(ival, 100);
-
-
-	lcmd.id = NodeID;
-	lcmd.dunit = ChildID;
-	lcmd.subtype = subType;
-	lcmd.value = ival;
-	lcmd.color = color;
-	sDecodeRXMessage(this, (const unsigned char*)& lcmd, defaultname.c_str(), BatteryLevel);
-}
-
 void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Unit, const uint8_t SubType, const int OnOff, const int Level, const _tColor color, const int BatteryLevel)
 {
 	int level = int(Level);
@@ -836,8 +779,6 @@ void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t Unit,
 	std::string name = "";
 	sDecodeRXMessage(this, (const unsigned char*)& lcmd, name.c_str(), BatteryLevel);
 }
-
-
 void CDomoticzHardwareBase::SendRGBWSwitch(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const int Level, const bool bIsRGBW, const std::string& defaultname)
 {
 	int level = int(Level);

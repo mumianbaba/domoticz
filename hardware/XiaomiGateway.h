@@ -113,23 +113,13 @@ public:
 	std::shared_ptr<std::thread> m_thread;
 	std::shared_ptr<std::thread> m_udp_thread;
 	bool m_OutputMessage;
-	bool m_IncludeVoltage;
 	bool m_ListenPort9898;
-	uint8_t m_GatewayRgbR;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
-	uint8_t m_GatewayRgbG;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
-	uint8_t m_GatewayRgbB;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
-	uint8_t m_GatewayRgbCW;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
-	uint8_t m_GatewayRgbWW;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
-	uint8_t m_GatewayRgbCT;          //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
-	uint8_t m_GatewayBrightnessInt; //TODO: Remove, otherwise colors will be mixed up if controlling more than one bulb
 	std::string m_GatewaySID;
 	std::string m_gwModel;
 	std::string m_GatewayIp;
 	int m_GatewayUPort;
 	std::string m_LocalIp;
 	std::string m_GatewayPassword;
-	std::string m_GatewayMusicId;
-	std::string m_GatewayVolume;
 	std::mutex m_mutex;
 
 	int getLocalIpAddr(std::vector<std::string>& ip_addrs);
@@ -155,7 +145,6 @@ public:
 		int m_uincastport;
 		std::string m_localip;
 		bool m_OutputMessage;
-		bool m_IncludeVoltage;
 		XiaomiGateway* m_XiaomiGateway;
 	};
 
