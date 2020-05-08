@@ -349,7 +349,7 @@ void MainWorker::InsertBuiltInTypeHardware()
 	result = m_sql.safe_query("SELECT Enabled FROM Hardware WHERE (Type==%d) AND (Address=='%q')", HTYPE_XiaomiGateway, "127.0.0.1");
 	if (result.empty())
 	{
-		m_sql.safe_query("INSERT INTO Hardware (Name, Enabled, Type, Address, Port, SerialPort, Username, Password, Extra, Mode1, Mode2, Mode3, Mode4, Mode5, Mode6) VALUES ('Tenbay gateway',1, %d,'127.0.0.1',9494, '9494','','','',0,0,0,0,0,0)", HTYPE_XiaomiGateway);
+		m_sql.safe_query("INSERT INTO Hardware (Name, Enabled, Type, Address, Port, SerialPort, Username, Password, DataTimeout) VALUES ('SM-4Z',1, %d,'127.0.0.1',9494, '9494','','', 1800)", HTYPE_XiaomiGateway);
 	}
 }
 

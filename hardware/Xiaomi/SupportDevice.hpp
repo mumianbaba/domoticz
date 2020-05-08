@@ -25,6 +25,8 @@ static const KwhOutlet  kwh{ unit, dir, {{"key1", "valuetype", k}, {"key2", "val
 static const KwhOutlet  kwh{ 1, 3, {{"load_power", "float", 1}, {"energy_consumed", "float", 1}}};
 
 
+static const LuxOutlet  lux{ 1, 3, {{"illumination", "int", 1}, {"lux", "int", 1}}};
+
 
 
 /*
@@ -192,7 +194,7 @@ static const LedOutlet ledTemp
 static const DevInfo  devInfoTab[] {
 	/**/
 	{
-		name : "Tenbay Gateway",
+		name : "SM-4Z",
 		zigbeeModel : "TBL-V01-GL",
 		model : "xxxxx",
 		vendor : "tenbay",
@@ -211,6 +213,20 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "lumi.ctrl_neutral1",
 		model : "QBKG03LM",
 		vendor : "lumi",
+		outlet : {&onoff0}
+	},
+	{
+		name : "Tuya Wall Dual Switch",
+		zigbeeModel : "TS0012",
+		model : "TY-ZL-UN-LB2-W",
+		vendor : "tuya",
+		outlet : {&onoff0, &onoff1}
+	},
+	{
+		name : "Tuya Wall Single Switch",
+		zigbeeModel : "TS0011",
+		model : "TY-ZL-UN-LB1-W",
+		vendor : "tuya",
 		outlet : {&onoff0}
 	},
 	/* door sensor */
@@ -247,7 +263,7 @@ static const DevInfo  devInfoTab[] {
 	},
 	/* gas sensor */
 	{
-		name : "Feibit GAS Sensor",
+		name : "Feibit Gas Sensor",
 		//zigbeeModel : "FNB54-GAS07ML0.8",
 		zigbeeModel : "FNB54-GAS07ML",
 		model : "NGAS107W-N1",
@@ -269,7 +285,7 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "lumi.sensor_motion.aq2",
 		model : "RTCGQ11LM",
 		vendor : "lumi",
-		outlet : {&SensorMotion}
+		outlet : {&SensorMotion, &lux}
 	},
 	{
 		name : "Tuya Motion Sensor",
@@ -368,7 +384,7 @@ static const DevInfo  devInfoTab[] {
 		outlet : {&weatherTH}
 	},
 	{
-		name : "Aqara RGB LED Bulb",
+		name : "Aqara LED Bulb",
 		zigbeeModel : "lumi.light.aqcn02",
 		model : "ZNLDP12LM",
 		vendor : "lumi",

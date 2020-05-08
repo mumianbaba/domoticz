@@ -241,7 +241,8 @@ boost::tribool request_parser::consume(request& req, const char* &pInput, const 
   case header_name:
     if (input == ':')
     {
-      state_ = space_before_header_value;
+      // state_ = space_before_header_value;
+      state_ = header_value;
       return boost::indeterminate;
     }
     else if (!is_char(input) || is_ctl(input) || is_tspecial(input))
@@ -272,6 +273,10 @@ boost::tribool request_parser::consume(request& req, const char* &pInput, const 
     else if (is_ctl(input))
     {
       return false;
+    }
+    else if (input == ' ')
+    {
+      return boost::indeterminate;
     }
     else
     {
@@ -341,6 +346,8 @@ boost::tribool request_parser::consume(request& req, const char* &pInput, const 
     return false;
   }
 }
+
+
 
 bool request_parser::is_char(int c)
 {

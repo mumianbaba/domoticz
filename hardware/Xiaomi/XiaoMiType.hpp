@@ -15,6 +15,7 @@
 typedef std::pair<unsigned int, std::string>   SsidPair;
 typedef boost::tuple<std::string  /* key */, std::string /* value */, bool> RuleOnOff;
 typedef boost::tuple<std::string  /* key */, std::string /* value */, bool> RuleKwh;
+typedef boost::tuple<std::string  /* key */, std::string /* value */, int> RuleLux;
 
 typedef boost::tuple<std::string  /* key */, std::string /* value */, int> RuleSelector;
 

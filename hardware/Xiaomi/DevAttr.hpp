@@ -22,6 +22,9 @@ public:
 	std::list<const OutletAttr*> outlet;
 };
 
+SsidPair idConvert_1(const std::string& mac);
+SsidPair idConvert_2(const std::string& mac);
+SsidPair idConvert_3(const std::string& mac);
 
 
 

@@ -79,43 +79,15 @@ bool  Device::writeTo(WriteParam& param)
 	return res;
 }
 
-
-#if 0
-bool Device::writeTo(const unsigned char* packet, int len, int type, int subType, void  * miGateway, std::string& key, std::string gwMac)
-{
-	auto outlet = getOutlet();
-	int type = pTypeGeneralSwitch;
-	int subtype= sSwitchGeneralSwitch;
-	int uint = 1;
-
-	bool res = false;
-	auto Outlet = m_devAttr->getOutlet();
-	for (const auto & itt : Outlet)
-	{
-		if (itt->match(type, subtype, uint) == true)
-		{
-			std::string mac = m_devID.getMac();
-			std::string model = m_devAttr->getZigbeeModel();
-
-			res = itt->writeTo(packet, len, mac, model, key, gwMac, miGateway);
-			break;
-		}
-	}
-	return res;
-}
-
-#endif
-
-
-bool Device::recvFrom(ReadParam& param)
+void Device::recvFrom(ReadParam& param)
 {
 	bool res = false;
 	auto Outlet = m_devAttr->getOutlet();
 	for (const auto & itt : Outlet)
 	{
-		res = itt->recvFrom(param);
+		itt->recvFrom(param);
 	}
-	return res;
+	return;
 }
 
 

@@ -239,6 +239,8 @@ const char *sqlCreateHardware =
 "[SerialPort] TEXT DEFAULT (''), "
 "[Username] VARCHAR(100), "
 "[Password] VARCHAR(100), "
+"[Model] VARCHAR(100) DEFAULT Unknown, "
+"[Mac] VARCHAR(48) DEFAULT Unknown, "
 "[Extra] TEXT DEFAULT (''),"
 "[Mode1] CHAR DEFAULT 0, "
 "[Mode2] CHAR DEFAULT 0, "
@@ -4563,6 +4565,7 @@ uint64_t CSQLHelper::UpdateValueInt(const int HardwareID, const char* ID, const 
 	case pTypeFS20:
 	case pTypeRadiator1:
 	case pTypeHunter:
+	case pTypeLux:
 		if ((devType == pTypeRadiator1) && (subType != sTypeSmartwaresSwitchRadiator))
 			break;
 		//Add Lighting log
@@ -5721,19 +5724,233 @@ bool CSQLHelper::UpdateCalendarMeter(
 	return true;
 }
 
-void CSQLHelper::UpdateMeter()
+void CSQLHelper::UpdateMeter(std::vector<std::vector<std::string> >& info)
 {
-	time_t now = mytime(NULL);
-	if (now == 0)
+	if (info.empty())
+	{
 		return;
+	}
+	time_t now = mytime(NULL);
+	if (now == 0){
+		return;
+	}
 	struct tm tm1;
 	localtime_r(&now, &tm1);
 
 	int SensorTimeOut = 60;
 	GetPreferencesVar("SensorTimeout", SensorTimeOut);
 
+	for (const auto & itt : info)
+	{
+		char szTmp[200];
+		std::vector<std::string> sd = itt;
+
+		std::string sOptions = sd[10];
+		std::map<std::string, std::string> options = BuildDeviceOptions(sOptions);
+		// We don't want to update meter if externally managed
+		if (options["DisableLogAutoUpdate"] == "true")
+		{
+			continue;
+		}
+
+		uint64_t ID = std::stoull(sd[0]);
+		std::string devname = sd[1];
+		int hardwareID = atoi(sd[2].c_str());
+		std::string DeviceID = sd[3];
+		unsigned char Unit = atoi(sd[4].c_str());
+
+		unsigned char dType = atoi(sd[5].c_str());
+		unsigned char dSubType = atoi(sd[6].c_str());
+		int nValue = atoi(sd[7].c_str());
+		std::string sValue = sd[8];
+		std::string sLastUpdate = sd[9];
+
+		std::string sUsage = "0";
+
+		//do not include sensors that have no reading within an hour
+		struct tm ntime;
+		time_t checktime;
+		ParseSQLdatetime(checktime, ntime, sLastUpdate, tm1.tm_isdst);
+
+
+		//Check for timeout, if timeout then dont add value
+		if (dType != pTypeP1Gas)
+		{
+			if (difftime(now, checktime) >= SensorTimeOut * 60)
+				continue;
+		}
+		else
+		{
+			//P1 Gas meter transmits results every 1 a 2 hours
+			if (difftime(now, checktime) >= 3 * 3600)
+				continue;
+		}
+
+		if (dType == pTypeYouLess)
+		{
+			std::vector<std::string> splitresults;
+			StringSplit(sValue, ";", splitresults);
+			if (splitresults.size() < 2)
+				continue;
+			sValue = splitresults[0];
+			sUsage = splitresults[1];
+		}
+		else if (dType == pTypeENERGY)
+		{
+			std::vector<std::string> splitresults;
+			StringSplit(sValue, ";", splitresults);
+			if (splitresults.size() < 2)
+				continue;
+			sUsage = splitresults[0];
+			double fValue = atof(splitresults[1].c_str()) * 100;
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if (dType == pTypePOWER)
+		{
+			std::vector<std::string> splitresults;
+			StringSplit(sValue, ";", splitresults);
+			if (splitresults.size() < 2)
+				continue;
+			sUsage = splitresults[0];
+			double fValue = atof(splitresults[1].c_str()) * 100;
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if (dType == pTypeAirQuality)
+		{
+			sprintf(szTmp, "%d", nValue);
+			sValue = szTmp;
+			m_notifications.CheckAndHandleNotification(ID, hardwareID, DeviceID, devname, Unit, dType, dSubType, (int)nValue);
+		}
+		else if ((dType == pTypeGeneral) && ((dSubType == sTypeSoilMoisture) || (dSubType == sTypeLeafWetness)))
+		{
+			sprintf(szTmp, "%d", nValue);
+			sValue = szTmp;
+		}
+		else if ((dType == pTypeGeneral) && (dSubType == sTypeVisibility))
+		{
+			double fValue = atof(sValue.c_str())*10.0f;
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if ((dType == pTypeGeneral) && (dSubType == sTypeDistance))
+		{
+			double fValue = atof(sValue.c_str())*10.0f;
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if ((dType == pTypeGeneral) && (dSubType == sTypeSolarRadiation))
+		{
+			double fValue = atof(sValue.c_str())*10.0f;
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if ((dType == pTypeGeneral) && (dSubType == sTypeSoundLevel))
+		{
+			double fValue = atof(sValue.c_str())*10.0f;
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if ((dType == pTypeGeneral) && (dSubType == sTypeKwh))
+		{
+			std::vector<std::string> splitresults;
+			StringSplit(sValue, ";", splitresults);
+			if (splitresults.size() < 2)
+				continue;
+
+			double fValue = atof(splitresults[0].c_str())*10.0f;
+			sprintf(szTmp, "%.0f", fValue);
+			sUsage = szTmp;
+
+			fValue = atof(splitresults[1].c_str());
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if (dType == pTypeLux)
+		{
+			double fValue = atof(sValue.c_str());
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if (dType == pTypeWEIGHT)
+		{
+			double fValue = atof(sValue.c_str())*10.0f;
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if (dType == pTypeRFXSensor)
+		{
+			double fValue = atof(sValue.c_str());
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if ((dType == pTypeGeneral) && (dSubType == sTypeCounterIncremental))
+		{
+			double fValue = atof(sValue.c_str());
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if ((dType == pTypeGeneral) && (dSubType == sTypeVoltage))
+		{
+			double fValue = atof(sValue.c_str())*1000.0f;
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if ((dType == pTypeGeneral) && (dSubType == sTypeCurrent))
+		{
+			double fValue = atof(sValue.c_str())*1000.0f;
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if ((dType == pTypeGeneral) && (dSubType == sTypePressure))
+		{
+			double fValue = atof(sValue.c_str())*10.0f;
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+		else if (dType == pTypeUsage)
+		{
+			double fValue = atof(sValue.c_str())*10.0f;
+			sprintf(szTmp, "%.0f", fValue);
+			sValue = szTmp;
+		}
+
+		long long MeterValue = 0;
+		long long MeterUsage = 0;
+
+		try
+		{
+			MeterUsage = std::stoll(sUsage);
+			MeterValue = std::stoll(sValue);
+		}
+		catch (const std::exception&)
+		{
+			_log.Log(LOG_ERROR, "UpdateMeter: Error converting sValue/sUsage! (IDX: %s, sValue: '%s', sUsage: '%s', dType: %d, sType: %d)", sd[0].c_str(), sValue.c_str(), sUsage.c_str(), dType, dSubType);
+		}
+
+		//insert record
+		safe_query(
+			"INSERT INTO Meter (DeviceRowID, Value, [Usage]) "
+			"VALUES ('%" PRIu64 "', '%lld', '%lld')",
+			ID,
+			MeterValue,
+			MeterUsage
+		);
+	}
+}
+
+void CSQLHelper::UpdateMeter(const std::string& devID, int type, int subType, int unit)
+{
+	auto result = safe_query(
+		"SELECT ID,Name,HardwareID,DeviceID,Unit,Type,SubType,nValue,sValue,LastUpdate,Options FROM DeviceStatus "
+	"WHERE (DeviceID == '%q') AND (Type == %d) AND (SubType == %d) AND (Unit == %d)", devID.c_str(), type, subType, unit);
+	UpdateMeter(result);
+}
+
+void CSQLHelper::UpdateMeter()
+{
 	std::vector<std::vector<std::string> > result;
-	std::vector<std::vector<std::string> > result2;
 
 	result = safe_query(
 		"SELECT ID,Name,HardwareID,DeviceID,Unit,Type,SubType,nValue,sValue,LastUpdate,Options FROM DeviceStatus WHERE ("
@@ -5785,207 +6002,7 @@ void CSQLHelper::UpdateMeter()
 		pTypeGeneral, sTypeCounterIncremental,
 		pTypeGeneral, sTypeKwh
 	);
-	if (!result.empty())
-	{
-		for (const auto & itt : result)
-		{
-			char szTmp[200];
-			std::vector<std::string> sd = itt;
-
-			std::string sOptions = sd[10];
-			std::map<std::string, std::string> options = BuildDeviceOptions(sOptions);
-			// We don't want to update meter if externally managed
-			if (options["DisableLogAutoUpdate"] == "true")
-			{
-				continue;
-			}
-
-			uint64_t ID = std::stoull(sd[0]);
-			std::string devname = sd[1];
-			int hardwareID = atoi(sd[2].c_str());
-			std::string DeviceID = sd[3];
-			unsigned char Unit = atoi(sd[4].c_str());
-
-			unsigned char dType = atoi(sd[5].c_str());
-			unsigned char dSubType = atoi(sd[6].c_str());
-			int nValue = atoi(sd[7].c_str());
-			std::string sValue = sd[8];
-			std::string sLastUpdate = sd[9];
-
-			std::string sUsage = "0";
-
-			//do not include sensors that have no reading within an hour
-			struct tm ntime;
-			time_t checktime;
-			ParseSQLdatetime(checktime, ntime, sLastUpdate, tm1.tm_isdst);
-
-
-			//Check for timeout, if timeout then dont add value
-			if (dType != pTypeP1Gas)
-			{
-				if (difftime(now, checktime) >= SensorTimeOut * 60)
-					continue;
-			}
-			else
-			{
-				//P1 Gas meter transmits results every 1 a 2 hours
-				if (difftime(now, checktime) >= 3 * 3600)
-					continue;
-			}
-
-			if (dType == pTypeYouLess)
-			{
-				std::vector<std::string> splitresults;
-				StringSplit(sValue, ";", splitresults);
-				if (splitresults.size() < 2)
-					continue;
-				sValue = splitresults[0];
-				sUsage = splitresults[1];
-			}
-			else if (dType == pTypeENERGY)
-			{
-				std::vector<std::string> splitresults;
-				StringSplit(sValue, ";", splitresults);
-				if (splitresults.size() < 2)
-					continue;
-				sUsage = splitresults[0];
-				double fValue = atof(splitresults[1].c_str()) * 100;
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if (dType == pTypePOWER)
-			{
-				std::vector<std::string> splitresults;
-				StringSplit(sValue, ";", splitresults);
-				if (splitresults.size() < 2)
-					continue;
-				sUsage = splitresults[0];
-				double fValue = atof(splitresults[1].c_str()) * 100;
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if (dType == pTypeAirQuality)
-			{
-				sprintf(szTmp, "%d", nValue);
-				sValue = szTmp;
-				m_notifications.CheckAndHandleNotification(ID, hardwareID, DeviceID, devname, Unit, dType, dSubType, (int)nValue);
-			}
-			else if ((dType == pTypeGeneral) && ((dSubType == sTypeSoilMoisture) || (dSubType == sTypeLeafWetness)))
-			{
-				sprintf(szTmp, "%d", nValue);
-				sValue = szTmp;
-			}
-			else if ((dType == pTypeGeneral) && (dSubType == sTypeVisibility))
-			{
-				double fValue = atof(sValue.c_str())*10.0f;
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if ((dType == pTypeGeneral) && (dSubType == sTypeDistance))
-			{
-				double fValue = atof(sValue.c_str())*10.0f;
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if ((dType == pTypeGeneral) && (dSubType == sTypeSolarRadiation))
-			{
-				double fValue = atof(sValue.c_str())*10.0f;
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if ((dType == pTypeGeneral) && (dSubType == sTypeSoundLevel))
-			{
-				double fValue = atof(sValue.c_str())*10.0f;
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if ((dType == pTypeGeneral) && (dSubType == sTypeKwh))
-			{
-				std::vector<std::string> splitresults;
-				StringSplit(sValue, ";", splitresults);
-				if (splitresults.size() < 2)
-					continue;
-
-				double fValue = atof(splitresults[0].c_str())*10.0f;
-				sprintf(szTmp, "%.0f", fValue);
-				sUsage = szTmp;
-
-				fValue = atof(splitresults[1].c_str());
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if (dType == pTypeLux)
-			{
-				double fValue = atof(sValue.c_str());
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if (dType == pTypeWEIGHT)
-			{
-				double fValue = atof(sValue.c_str())*10.0f;
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if (dType == pTypeRFXSensor)
-			{
-				double fValue = atof(sValue.c_str());
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if ((dType == pTypeGeneral) && (dSubType == sTypeCounterIncremental))
-			{
-				double fValue = atof(sValue.c_str());
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if ((dType == pTypeGeneral) && (dSubType == sTypeVoltage))
-			{
-				double fValue = atof(sValue.c_str())*1000.0f;
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if ((dType == pTypeGeneral) && (dSubType == sTypeCurrent))
-			{
-				double fValue = atof(sValue.c_str())*1000.0f;
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if ((dType == pTypeGeneral) && (dSubType == sTypePressure))
-			{
-				double fValue = atof(sValue.c_str())*10.0f;
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-			else if (dType == pTypeUsage)
-			{
-				double fValue = atof(sValue.c_str())*10.0f;
-				sprintf(szTmp, "%.0f", fValue);
-				sValue = szTmp;
-			}
-
-			long long MeterValue = 0;
-			long long MeterUsage = 0;
-
-			try
-			{
-				MeterUsage = std::stoll(sUsage);
-				MeterValue = std::stoll(sValue);
-			}
-			catch (const std::exception&)
-			{
-				_log.Log(LOG_ERROR, "UpdateMeter: Error converting sValue/sUsage! (IDX: %s, sValue: '%s', sUsage: '%s', dType: %d, sType: %d)", sd[0].c_str(), sValue.c_str(), sUsage.c_str(), dType, dSubType);
-			}
-
-			//insert record
-			safe_query(
-				"INSERT INTO Meter (DeviceRowID, Value, [Usage]) "
-				"VALUES ('%" PRIu64 "', '%lld', '%lld')",
-				ID,
-				MeterValue,
-				MeterUsage
-			);
-		}
-	}
+	UpdateMeter(result);
 }
 
 void CSQLHelper::UpdateMultiMeter()

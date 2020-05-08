@@ -41,6 +41,20 @@ inline SsidPair idConvert_2(const std::string& mac)
 	return std::make_pair(rowId, strSsid);
 }
 
+inline SsidPair idConvert_3(const std::string& mac)
+{
+	unsigned int rowId;
+	char szTmp[64];
+	rowId = OutletAttr::macToUint(mac);
+	unsigned char id1 = (unsigned char)((rowId & 0xFF000000) >> 24);
+	unsigned char id2 = (unsigned char)((rowId & 0x00FF0000) >> 16);
+	unsigned char id3 = (unsigned char)((rowId & 0x0000FF00) >> 8);
+	unsigned char id4 = (unsigned char)(rowId & 0x000000FF);
+
+	sprintf(szTmp, "%X%02X%02X%02X", id1, id2, id3, id4);
+	std::string  strSsid = szTmp;
+	return std::make_pair(rowId, strSsid);
+}
 
 
 static bool checkWriteParam(const WriteParam&  param)
@@ -125,17 +139,15 @@ bool OnOffOutlet::recvFrom(const ReadParam& param) const
 	}
 	std::cout<<"OnOffOutlet result:"<<result<<std::endl;
 
-	_eSwitchType switchType = STYPE_OnOff;
+	_eSwitchType switchType = static_cast<_eSwitchType>(getSWType());
 	int unit = getUnit();
 	bool bIsOn = result;
 	int level = (bIsOn == true)? 10 :0;
-	std::string loadPower = "";
-	std::string powerConsumed = "";
 	int battery = 255;
 	std::string name = "";
 
 	XiaomiGateway* gw = static_cast<XiaomiGateway*>(miGateway);
-	gw->InsertUpdateSwitch(mac, name, bIsOn, switchType, unit, level, cmd, loadPower, powerConsumed, battery);
+	gw->updateSwitch(mac, name, bIsOn, switchType, unit, level, cmd, battery);
 	return true;
 }
 
@@ -234,17 +246,15 @@ bool SensorBinOutlet::recvFrom(const ReadParam& param) const
 		return false;
 	}
 
-	_eSwitchType switchType = STYPE_OnOff;
+	_eSwitchType switchType = static_cast<_eSwitchType>(getSWType());
 	int unit = getUnit();
 	bool bIsOn = result;
 	int level = (bIsOn == true)? 10 :0;
-	std::string loadPower = "";
-	std::string powerConsumed = "";
 	int battery = 255;
 	std::string name = "";
 
 	XiaomiGateway* gw = static_cast<XiaomiGateway*>(miGateway);
-	gw->InsertUpdateSwitch(mac, name, bIsOn, switchType, unit, level, cmd, loadPower, powerConsumed, battery);
+	gw->updateSwitch(mac, name, bIsOn, switchType, unit, level, cmd, battery);
 	return true;
 }
 
@@ -347,7 +357,7 @@ bool KwhOutlet::recvFrom(const ReadParam& param) const
 
 	int battery = 255;
 	XiaomiGateway* gw = static_cast<XiaomiGateway*>(miGateway);
-	gw->InsertUpdateKwh(mac, name, loadPower, consumed, battery);
+	gw->updateKwh(mac, name, loadPower, consumed, battery);
 	return true;
 }
 
@@ -356,6 +366,125 @@ bool KwhOutlet::writeTo(const WriteParam&  param) const
 	std::cout<<"KwhOutlet writeTo"<<std::endl;
 	return true;
 }
+
+
+
+LuxOutlet::LuxOutlet(int unit,   int dir, std::initializer_list<RuleLux> list)
+	:OutletAttr(pTypeLux, sTypeLux, 0, static_cast<int>(unit), static_cast<int>(dir), "")
+{
+	for (const auto &itt : list)
+	{
+		m_rule.emplace_back(itt);
+	}
+}
+
+SsidPair LuxOutlet::idConverter(const std::string& mac) const
+{
+	return idConvert_3(mac);
+}
+
+
+bool LuxOutlet::recvFrom(const ReadParam& param) const
+{
+	if (!checkReadParam(param))
+	{
+		return false;
+	}
+	XiaomiGateway* miGateway = static_cast<XiaomiGateway*>(param.miGateway);
+
+	Json::Value jsRoot;
+	bool commit = false;
+
+	ParseJSon(param.message, jsRoot);
+	if (jsRoot.isMember("params") == false)
+	{
+		std::cout<<"LuxOutlet: params not in json"<<std::endl;
+		return false;
+	}
+
+	std::string mac = jsRoot["sid"].asString();
+	std::string Model = jsRoot["model"].asString();
+	std::string cmd = jsRoot["cmd"].asString();
+	Json::Value params = jsRoot["params"];
+
+	std::vector<boost::tuple<std::string, std::string>> result;
+	std::string key;
+
+	int ii = 0;
+
+	for (const auto & itt : m_rule)
+	{
+		result.emplace_back(boost::make_tuple(boost::get<0>(itt), ""));
+	}
+
+	for (ii = 0; ii < params.size(); ii++)
+	{
+		for (auto & itt : result)
+		{
+			key = boost::get<0>(itt);
+			std::cout<<"key: "<<key<<std::endl;
+			if (params[ii].isMember(key))
+			{
+				 boost::get<1>(itt) = params[ii][key].asString();
+				 commit = true;
+			}
+		}
+	}
+
+	if (commit == false)
+	{
+		std::cout<<"LuxOutlet: no valid key or value at json, nothing useful"<<std::endl;
+		return false;
+	}
+
+	std::string name = "";
+	std::string illumination;
+	std::string lux;
+	int value = 0;
+	ii = result.size();
+	switch(ii)
+	{
+		case 2:
+		{
+			lux = boost::get<1>(result[1]);
+		}
+		case 1:
+		{
+			illumination = boost::get<1>(result[0]);
+		}
+		break;
+		default:
+			std::cout<<"rule is invalid, please set illumination first and lux second"<<std::endl;
+			return false;
+		break;
+	}
+	std::cout<<"ii="<< ii <<"  "<<illumination<<" --result 2--  "<<lux<<std::endl;
+
+	try{
+		if (!lux.empty()){
+			value = std::stoi(lux);
+		}
+		if (!illumination.empty()){
+			value = std::stoi(illumination);
+		}
+	}
+	catch(std::exception &e){
+		std::cout<<"error occur, what:"<<e.what()<<std::endl;
+		return false;
+	}
+	int battery = 255;
+
+	XiaomiGateway* gw = static_cast<XiaomiGateway*>(miGateway);
+	gw->updateLux(mac, getUnit(), name, value, battery);
+	return true;
+}
+
+bool LuxOutlet::writeTo(const WriteParam&  param) const
+{
+	std::cout<<"LuxOutlet writeTo"<<std::endl;
+	return true;
+}
+
 
 
 
@@ -420,17 +549,15 @@ bool SelectorOutlet::recvFrom(const ReadParam& param) const
 
 	std::cout<<"SelectorOutlet   result:"<<result<<std::endl;
 
-	_eSwitchType switchType = STYPE_Selector;
+	_eSwitchType switchType = static_cast<_eSwitchType>(getSWType());
 	int unit = getUnit();
 	bool bIsOn = (result > 0)? true : false;
 	int level = result;
-	std::string loadPower = "";
-	std::string powerConsumed = "";
 	int battery = 255;
 	std::string name = "";
 
 	XiaomiGateway* gw = static_cast<XiaomiGateway*>(miGateway);
-	gw->InsertUpdateSwitch(mac, name, bIsOn, switchType, unit, level, cmd, loadPower, powerConsumed, battery);
+	gw->updateSwitch(mac, name, bIsOn, switchType, unit, level, cmd, battery);
 
 	return true;
 }
@@ -598,14 +725,14 @@ bool WeatherOutlet::recvFrom(const ReadParam& param) const
 		case WeatherType::WeatherTemp:
 
 			temp = boost::get<1>(result[0]);
-			gw->InsertUpdateTemperature(mac, name, ::atof(temp.c_str()), battery);
+			gw->updateTemperature(mac, name, ::atof(temp.c_str()), battery);
 			return true;
 
 		break;
 
 		case WeatherType::WeatherHum:
 			hum = boost::get<1>(result[0]);
-			gw->InsertUpdateHumidity(mac, name, ::atoi(hum.c_str()), battery);
+			gw->updateHumidity(mac, name, ::atoi(hum.c_str()), battery);
 			return true;
 		break;
 
@@ -613,7 +740,7 @@ bool WeatherOutlet::recvFrom(const ReadParam& param) const
 			temp = boost::get<1>(result[0]);
 			hum  = boost::get<1>(result[1]);
 			std::cout<<"-------WeatherTHum-----------"<<temp<<"      "<<hum<<" "<<std::endl;
-			gw->InsertUpdateTempHum(mac, name, temp, hum, battery);
+			gw->updateTempHum(mac, name, temp, hum, battery);
 			return true;
 		break;
 
@@ -622,7 +749,7 @@ bool WeatherOutlet::recvFrom(const ReadParam& param) const
 			hum  = boost::get<1>(result[1]);
 			baro = boost::get<1>(result[2]);
 			std::cout<<"-------WeatherTHBaro--------"<<temp<<"      "<<hum<<" "<<baro<<std::endl;
-			gw->InsertUpdateTempHumPressure(mac, name, temp, hum, baro, battery);
+			gw->updateTempHumPressure(mac, name, temp, hum, baro, battery);
 			return true;
 		break;
 	}
@@ -765,21 +892,21 @@ bool LedOutlet::recvFrom(const ReadParam& param) const
 	status = boost::get<1>(result[0]);
 	if (!status.empty())
 	{
-		int Onoff = -1;
+		int onoff = -1;
 		if (status == "on")
 		{
-			Onoff == Color_LedOn;
+			onoff == Color_LedOn;
 		}
 		else if (status == "off")
 		{
-			Onoff == Color_LedOff;
+			onoff == Color_LedOff;
 		}
 		else
 		{
 			std::cout<<boost::get<0>(result[0])<<" value out of range"<<std::endl;
 			return false;
 		}
-		gw->InsertUpdateRGBLight(mac, getUnit(), getSubType(), Onoff, level, color, battery);
+		gw->updateRGBLight(mac, getUnit(), getSubType(), onoff, level, color, battery);
 	}
 
 	switch(m_type)
@@ -863,7 +990,7 @@ bool LedOutlet::recvFrom(const ReadParam& param) const
 			return false;
 		break;
 	}
-	gw->InsertUpdateRGBLight(mac, getUnit(), getSubType(), Color_SetColor, level, color, battery);
+	gw->updateRGBLight(mac, getUnit(), getSubType(), Color_SetColor, level, color, battery);
 	return true;
 }
 
@@ -1041,7 +1168,8 @@ bool TbGateway::recvFrom(const ReadParam& param) const
 	}
 	std::string token = jsRoot["token"].asString();
 	std::string ip = params[0]["ip"].asString();
-	XiaomiGateway::XiaomiGatewayTokenManager::GetInstance().UpdateTokenSID(ip, token, mac);
+	TokenManager::getInstance().updateTokenSid(ip, token, mac);
+	miGateway->SetHeartbeatReceived();
 	return true;
 }
 

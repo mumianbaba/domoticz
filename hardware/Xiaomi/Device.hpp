@@ -51,10 +51,8 @@ class Device
 		Device( std::string mac, const DevAttr* devAttr);
 		~Device() {std::cout<< "~Device"<<std::endl;}
 	public:
-		virtual bool recvFrom(ReadParam& param);
-	
-		//virtual bool writeTo(const unsigned char* packet, int len, int type, int subType, void	* miGateway, std::string& key, std::string gwMac);
-		
+		virtual void recvFrom(ReadParam& param);
+
 		virtual bool writeTo(WriteParam& param);
 
 	public:

@@ -62,13 +62,31 @@ public:
 	bool recvFrom(const ReadParam&  param)  const override;
 
 	bool writeTo(const WriteParam& param) const override;
-
-
 private:
 
 	std::vector<boost::tuple<std::string  /* key */, std::string /* value */,  int>> m_rule;
 
 };
+
+
+class LuxOutlet : public OutletAttr
+{
+
+public:
+	LuxOutlet(int unit, int dir, std::initializer_list<RuleLux> list);
+
+public:
+	bool recvFrom(const ReadParam&  param)  const override;
+
+	bool writeTo(const WriteParam& param) const override;
+
+	SsidPair idConverter(const std::string& mac) const override;
+private:
+
+	std::vector<boost::tuple<std::string  /* key */, std::string /* value */,  int>> m_rule;
+
+};
+
 
 
 class SelectorOutlet : public OutletAttr

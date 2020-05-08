@@ -1,3 +1,4 @@
 return {
 	active = true,
-	on = {
+	on = {}
+}

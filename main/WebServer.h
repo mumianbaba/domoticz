@@ -395,6 +395,7 @@ private:
 	bool m_bDoStop;
 	std::string m_server_alias;
 	std::string ConverParams(const request &req, bool isSubDev = false);
+	std::vector<std::vector<std::string> > ConverParamsPlus(const request &req, bool isSubDev = false);
 	std::vector<std::string> GetDeviceIdsByMac(std::string mac);
 	std::string PagingToSql(const request& req);
 

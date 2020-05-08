@@ -62,6 +62,11 @@
 #include "../notifications/NotificationHelper.h"
 #include "../main/LuaHandler.h"
 
+
+
+#include <sstream>
+
+
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
@@ -12188,7 +12193,7 @@ namespace http {
 #endif
 
 			std::vector<std::vector<std::string> > result;
-			result = m_sql.safe_query("SELECT ID, Name, Enabled, Type, Address, Port, SerialPort, Username, Password, Extra, Mode1, Mode2, Mode3, Mode4, Mode5, Mode6, DataTimeout FROM Hardware ORDER BY ID ASC");
+			result = m_sql.safe_query("SELECT ID, Name, Enabled, Type, Address, Port, SerialPort, Username, Password, Extra, Mode1, Mode2, Mode3, Mode4, Mode5, Mode6, DataTimeout, Model, Mac FROM Hardware ORDER BY ID ASC");
 			if (!result.empty())
 			{
 				int ii = 0;
@@ -12227,7 +12232,8 @@ namespace http {
 						root["result"][ii]["Mode6"] = atoi(sd[15].c_str());
 					}
 					root["result"][ii]["DataTimeout"] = atoi(sd[16].c_str());
-
+					root["result"][ii]["Model"] = sd[17];
+					root["result"][ii]["Mac"] = sd[18];
 					//Special case for openzwave (status for nodes queried)
 					CDomoticzHardwareBase *pHardware = m_mainworker.GetHardware(atoi(sd[0].c_str()));
 					if (pHardware != NULL)
@@ -14144,42 +14150,111 @@ namespace http {
 			if (!client.empty()) {
 				stdlower(client);
 			}
-
+			std::vector<std::vector<std::string> > reqInfo;
+			std::vector<std::string> idxVector;
+			std::map<std::string, int> outletMap;
 			std::string sIdx;
 			std::string sSql = " ";
 			if (!client.empty() && client != "web") {
 				// get page and count param
 				sSql = PagingToSql(req);
-				sIdx = ConverParams(req, false);
+				reqInfo = ConverParamsPlus(req, false);
+				if (reqInfo.empty()){
+					return;
+				}
 			} else {
 				sIdx = request::findValue(&req, "idx");
+				if (sIdx.empty()){
+					return;
+				}
+				idxVector.emplace_back(sIdx);
+				outletMap[sIdx] = 0;
 			}
 
-			uint64_t idx = 0;
-			if (sIdx != "")
-			{
-				idx = std::strtoull(sIdx.c_str(), nullptr, 10);
+			for (const auto& itt : reqInfo){
+				idxVector.emplace_back(itt[0]);
+				outletMap[itt[0]] = atoi(itt[2].c_str());
 			}
+
 			std::vector<std::vector<std::string> > result;
+			result = m_sql.safe_query("SELECT ROWID, nValue, sValue, User, Date, DeviceRowID FROM LightingLog WHERE DeviceRowID IN (%q) ORDER BY Date DESC %q",
+					boost::join(idxVector, ",").c_str(), sSql.c_str());
 
+			std::cout<<"idx_join:"<<boost::join(idxVector, ",")<<std::endl;
 			root["status"] = "OK";
 			root["title"] = "TextLog";
 
-			result = m_sql.safe_query("SELECT ROWID, sValue, User, Date FROM LightingLog WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date DESC %q",
-					idx, sSql.c_str());
+			if (result.empty()){
+				_log.Debug(DEBUG_WEBSERVER, "Get no log");
+				return;
+			}
 
-			if (!result.empty())
+			int ii = 0;
+			for (const auto & itt : result)
 			{
-				int ii = 0;
-				for (const auto & itt : result)
-				{
-					std::vector<std::string> sd = itt;
+				std::vector<std::string> sd = itt;
 
-					root["result"][ii]["idx"] = sd[0];
-					root["result"][ii]["Data"] = sd[1];
-					root["result"][ii]["User"] = sd[2];
-					root["result"][ii]["Date"] = sd[3];
-					ii++;
+				root["result"][ii]["idx"] = sd[0];
+				root["result"][ii]["Status"] = atoi(sd[1].c_str());
+				root["result"][ii]["Data"] = sd[2];
+				root["result"][ii]["User"] = sd[3];
+				root["result"][ii]["Date"] = sd[4];
+				root["result"][ii]["Outlet"] = outletMap[sd[5]];
+				ii++;
+			}
+
+			if (reqInfo.size() > 1){
+				/* mutil outlet log get over at here */
+				return;
+			}
+
+			int idx = std::strtoull(reqInfo[0][0].c_str(), nullptr, 10);
+			std::string mac = reqInfo[0][1];
+			auto relativeDev = m_sql.safe_query("SELECT ID, Type, SubType, SwitchType, Unit, Outlet FROM DeviceStatus "
+												"WHERE (Mac=='%q') AND (ID !=%" PRIu64 ")", mac.c_str(), idx);
+			if (relativeDev.empty()){
+				return;
+			}
+
+			int type = atoi(reqInfo[0][4].c_str());
+			int subType = atoi(reqInfo[0][5].c_str());
+			int switchType = atoi(reqInfo[0][6].c_str());
+
+			uint64_t _ID;
+			int _type;
+			int _subType;
+			int _switchType;
+
+			for (const auto& itt : relativeDev)
+			{
+				_ID =  std::strtoull(itt[0].c_str(), nullptr, 10);
+				_type = atoi(itt[1].c_str());
+				_subType = atoi(itt[2].c_str());
+
+				_log.Debug(DEBUG_WEBSERVER, "type:%d  subtype:%d  swtype:%d  _type:%d  _subtype:%d",
+											type, subType, switchType, _type, _subType);
+
+				if (type == pTypeGeneralSwitch && subType == sSwitchGeneralSwitch && switchType == STYPE_Motion
+					&& _type == pTypeLux && _subType == sTypeLux)
+				{
+					for (int ii = 0; ii < root["result"].size(); ii++)
+					{
+						std::string date = root["result"][ii]["Date"].asString();
+						std::string lux;
+						std::stringstream ss;
+						ss<<"SELECT ROWID, sValue, Date FROM LightingLog WHERE (DeviceRowID==";
+						ss<<_ID<<") AND (abs(strftime('%%s', '"<<date;
+						ss<<"') - strftime('%%s',Date)) <= 6)";
+
+						auto luxLog = m_sql.safe_query(ss.str().c_str());
+						if (!luxLog.empty())
+						{
+							lux = luxLog[0][1];
+							_log.Debug(DEBUG_WEBSERVER, "luxlog not empty, match number:%lu, lux:%s  date:%s",
+										luxLog.size(), luxLog[0][1].c_str(), luxLog[0][2].c_str());
+						}
+						root["result"][ii]["Lux"] = lux;
+					}
 				}
 			}
 		}
@@ -18231,6 +18306,35 @@ namespace http {
 
 			return result[0][0];
 		}
+
+		std::vector<std::vector<std::string> > CWebServer::ConverParamsPlus(const request &req, bool isSubDev) {
+			std::string mac;
+			std::string outlet;
+			if (!isSubDev) {
+				mac = request::findValue(&req, "mac");
+				outlet = request::findValue(&req, "outlet");
+			} else {
+				mac = request::findValue(&req, "submac");
+				outlet = request::findValue(&req, "suboutlet");
+			}
+
+			std::vector<std::vector<std::string>> result;
+			if (mac.empty() || outlet.empty()) {
+				return result;
+			}
+
+			std::vector<std::string> outletvector;
+			boost::split(outletvector, outlet, boost::is_any_of(";"), boost::token_compress_on);
+
+
+			result = m_sql.safe_query("SELECT ID, Mac, Outlet, DeviceID, Type, SubType, SwitchType, Unit FROM DeviceStatus WHERE (Mac == '%q') AND (Outlet IN (%q)) ", mac.c_str(), boost::join(outletvector, ",").c_str());
+			if (result.empty()) {
+				_log.Log(LOG_ERROR, "Not find the mac and outlet at database, mac:%s outlet=%s", mac.c_str(), outlet.c_str());
+			}
+			return result;
+		}
+
+
 
 		std::vector<std::string> CWebServer::GetDeviceIdsByMac(std::string mac) {
 			std::vector<std::string> devids;
