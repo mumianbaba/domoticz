@@ -1792,7 +1792,7 @@ void MainWorker::Do_Work()
 
 				tzset(); //this because localtime_r/localtime_s does not update for DST
 
-						 //check for 5 minute schedule
+				//check for 5 minute schedule
 				if (ltime.tm_min % m_sql.m_ShortLogInterval == 0)
 				{
 					m_sql.ScheduleShortlog();
@@ -1835,6 +1835,22 @@ void MainWorker::Do_Work()
 						m_ScheduleLastDayTime = atime;
 						m_sql.ScheduleDay();
 					}
+				}
+				/* 4:00 clean sampling date and light scenelog */
+				else if (ltime.tm_hour == 4)
+				{
+					m_sql.ScheduleCleanupLightSceneLog();
+					m_sql.ScheduleCleanShortlog();
+					m_sql.ScheduleCleanCalendarLog();
+				}
+
+				else if (ltime.tm_hour % 4 == 0)
+				{
+					//m_sql.CheckLightLogCount();
+					//m_sql.CheckSceneLogCount();
+					//m_sql.CheckStrategyLogCount();
+					//m_sql.CheckSampleLogCount();
+					//m_sql.CheckCalenderLogCount();
 				}
 #ifdef WITH_OPENZWAVE
 				if (ltime.tm_hour == 4)
@@ -12035,14 +12051,6 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string>& sd, std::string 
 		level = std::max(0, level);
 		lcmd.value = level;
 
-		//Special case when color is passed from timer or scene
-		if ((switchcmd == "On") || (switchcmd == "Set Level"))
-		{
-			if (color.mode != ColorModeNone)
-			{
-				switchcmd = "Set Color";
-			}
-		}
 		if (!GetLightCommand(dType, dSubType, switchtype, switchcmd, lcmd.command, options))
 			return false;
 		if (!WriteToHardware(HardwareID, (const char*)&lcmd, sizeof(_tColorSwitch)))
@@ -13237,6 +13245,7 @@ bool MainWorker::SwitchScene(const uint64_t idx, std::string switchcmd, const st
 	}
 
 	m_sql.safe_query("INSERT INTO SceneLog (SceneRowID, nValue, User) VALUES ('%" PRIu64 "', '%d', '%q')", idx, nValue, User.c_str());
+	m_sql.safe_query("INSERT INTO StrategyLog (StrategyRowID, StrategyType, Status) VALUES ('%" PRIu64 "', 'manual', '0')", idx);
 
 	std::string szLastUpdate = TimeToString(NULL, TF_DateTime);
 	m_sql.safe_query("UPDATE Scenes SET nValue=%d, LastUpdate='%q' WHERE (ID == %" PRIu64 ")",
@@ -13325,6 +13334,7 @@ bool MainWorker::SwitchScene(const uint64_t idx, std::string switchcmd, const st
 			bool bHaveDimmer = false;
 			bool bHaveGroupCmd = false;
 			int maxDimLevel = 0;
+			std::vector<std::string> cmdList;
 
 			GetLightStatus(dType, dSubType, switchtype, cmd, sValue, lstatus, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
 
@@ -13363,13 +13373,34 @@ bool MainWorker::SwitchScene(const uint64_t idx, std::string switchcmd, const st
 				}
 			}
 
+			if (switchtype == STYPE_Dimmer)
+			{
+				if (lstatus == "Set Level")
+				{
+					cmdList.emplace_back("On");
+					if (color.mode ==  ColorModeNone)
+					{
+						cmdList.emplace_back("Set Level");
+					}
+					else
+					{
+						cmdList.emplace_back("Set Color");
+					}
+				}
+				else{
+					cmdList.emplace_back(lstatus);
+				}
+			}
 			int idx = atoi(sd[0].c_str());
 			if (switchtype != STYPE_PushOn)
 			{
 				int delay = (lstatus == "Off") ? offdelay : ondelay;
 				if (m_sql.m_bEnableEventSystem && !bEventTrigger)
 					m_eventsystem.SetEventTrigger(idx, m_eventsystem.REASON_DEVICE, static_cast<float>(delay));
-				SwitchLight(idx, lstatus, ilevel, color, false, delay, User);
+				for (const auto& oneCmd : cmdList)
+				{
+					SwitchLight(idx, oneCmd, ilevel, color, false, delay, User);
+				}
 				if (scenetype == SGTYPE_SCENE)
 				{
 					if ((lstatus != "Off") && (offdelay > 0))

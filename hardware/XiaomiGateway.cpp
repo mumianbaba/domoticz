@@ -65,8 +65,7 @@ const char* rspWrite = "write_rsp";
 
 const char* repReport = "report";
 const char* repHBeat = "heartbeat";
-
-
+const char* repNewDevList = "new_dev_list";
 
 }
 
@@ -82,8 +81,10 @@ std::mutex XiaomiGateway::m_gwListMutex;
 AttrMap XiaomiGateway::m_attrMap;
 std::shared_ptr<boost::thread> XiaomiGateway::m_whoIsThread;
 
-std::shared_ptr<UdpServer> UdpServer::m_updServer;
-std::shared_ptr< boost::asio::io_service> UdpServer::m_ioService;
+UdpServer* UdpServer::m_updServer = nullptr;
+std::mutex UdpServer::m_mutex;
+volatile bool UdpServer::m_isRun = false;
+
 
 bool XiaomiGateway::checkZigbeeMac(const std::string& mac)
 {
@@ -107,7 +108,9 @@ bool XiaomiGateway::checkZigbeeMac(const std::string& mac)
 
 XiaomiGateway::XiaomiGateway(const int ID)
 {
+	_log.Log(LOG_STATUS, "new XiaomiGateway");
 	m_HwdID = ID;
+	m_outputMessage = false;
 	m_devInfoInited = false;
 	m_gwUnicastPort = 0;
 	if (m_attrMap.empty()){
@@ -117,10 +120,14 @@ XiaomiGateway::XiaomiGateway(const int ID)
 
 XiaomiGateway::~XiaomiGateway(void)
 {
-	std::cout<<"~XiaomiGateway"<<std::endl;
+	_log.Log(LOG_STATUS, "~XiaomiGateway");
+	std::unique_lock<std::mutex> lock(UdpServer::m_mutex);
 	auto server = UdpServer::getUdpServer();
-	if (gatewayListSize() == 0 && server){
+
+	if (gatewayListSize() == 0 && server != nullptr){
+		UdpServer::resetUdpServer();
 		server->stop();
+		delete server;
 		_log.Log(LOG_STATUS, "udp service is stop");
 	}
 
@@ -137,11 +144,12 @@ bool XiaomiGateway::StartHardware()
 	RequestStart();
 	m_devInfoInited = false;
 	auto result =  m_sql.safe_query
-		("SELECT Password, Address FROM Hardware WHERE Type=%d AND ID=%d AND Enabled=1",
-		  HTYPE_XiaomiGateway, m_HwdID);
+					("SELECT Password, Address FROM Hardware WHERE Type=%d AND ID=%d AND Enabled=1",
+		  			HTYPE_XiaomiGateway, m_HwdID);
 
 	if (result.empty()){
-		_log.Log(LOG_ERROR, "Not find or not enable the hardware(type:%d, id=%d)", HTYPE_XiaomiGateway, m_HwdID);
+		_log.Log(LOG_ERROR, "Not find or not enable the hardware(type:%d, id=%d)",
+							HTYPE_XiaomiGateway, m_HwdID);
 		return false;
 	}
 
@@ -167,6 +175,7 @@ bool XiaomiGateway::StopHardware()
 		m_thread->join();
 		m_thread.reset();
 	}
+	m_outputMessage = false;
 	m_devInfoInited = false;
 	m_deviceMap.clear();
 	rmFromGatewayList();
@@ -176,6 +185,7 @@ bool XiaomiGateway::StopHardware()
 	m_gwUnicastPort = 0;
 	m_localIp = "";
 	m_gwPassword = "";
+	_log.Log(LOG_STATUS, "stop the XiaomiGateway Hardware");
 	return true;
 }
 
@@ -270,47 +280,59 @@ std::string XiaomiGateway::getSimilarLocalAddr(const std::string& gwIp)
 }
 void XiaomiGateway::Do_Work()
 {
-	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Worker started...", m_HwdID);
 	m_localIp = getSimilarLocalAddr(m_gwIp);
-	if (!UdpServer::getUdpServer()){
-
-		auto ioService = std::make_shared<boost::asio::io_service>();
-		auto server = std::make_shared<UdpServer>(ioService, m_localIp);
-
-		bool res = server->initServer();
-		if (false == res){
-			StopHardware();
-			_log.Log(LOG_ERROR, "init upd server failed");
-			return;
+	{
+		std::unique_lock<std::mutex> lock(UdpServer::m_mutex);
+		if (!UdpServer::m_isRun)
+		{
+			UdpServer::m_isRun = true;
+			UdpServer* server = new UdpServer (m_localIp);
+			bool res = server->run();
+			if (false == res){
+				StopHardware();
+				_log.Log(LOG_ERROR, "init upd server failed");
+				return;
+			}
+			UdpServer::setUdpServer(server);
+			_log.Log(LOG_STATUS, "XiaomiGateway: udp server is start...");
 		}
+		sendMessageToGateway("{\"cmd\":\"whois\"}", "224.0.0.50", 4321);
 
-		res = server->run();
-		if (false == res){
-			StopHardware();
-			_log.Log(LOG_ERROR, "init upd server failed");
-			return;
+		if (!m_whoIsThread){
+
+			m_whoIsThread = std::make_shared<boost::thread>(XiaomiGateway::whois);
+			SetThreadName(m_whoIsThread->native_handle(), "XiaomiGwWhois");
 		}
-		UdpServer::setUdpServer(server);
-		_log.Log(LOG_STATUS, "XiaomiGateway: udp server is start...");
 	}
-	sendMessageToGateway("{\"cmd\":\"whois\"}", "224.0.0.50", 4321);
-
-
-	if (!m_whoIsThread){
-
-		m_whoIsThread = std::make_shared<boost::thread>(XiaomiGateway::whois);
-		SetThreadName(m_whoIsThread->native_handle(), "XiaomiGwWhois");
-		_log.Log(LOG_STATUS, "XiaomiGateway: whois thread  is start...");
-	}
-
+	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Worker started...", m_HwdID);
 
 	int sec_counter = 0;
 	while (!IsStopRequested(1000))
 	{
 		sec_counter++;
-		if (sec_counter % 12 == 0) {
+		if (sec_counter % 12 == 0)
+		{
 			m_LastHeartbeat = mytime(NULL);
 		}
+#if 0
+		if (sec_counter % (20) == 0)
+		{
+			time_t now = time(NULL);
+			time_t ts;
+			std::shared_ptr<Device> dev;
+			for (const auto & itt : m_deviceMap)
+			{
+				dev = itt.second;
+				ts = dev->getTimestamp();
+				if (now - ts > (60*10))
+				{
+					setOnlineStatus(dev, false);
+					_log.Log(LOG_STATUS, "have device timeout for 30min, offline. model:%s  mac:%s",
+									dev->getZigbeeModel().c_str(), dev->getMac().c_str());
+				}
+			}
+		}
+#endif
 	}
 	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): stopped", m_HwdID);
 }
@@ -529,6 +551,13 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 		return false;
 	}
 
+	if (getOnlineStatus(dev) == OnlineStatus::Offline){
+		_log.Log(LOG_STATUS, "device is offline, can't control. model:%s Mac:%s",
+							  param.model.c_str(), param.mac.c_str());
+		return false;
+	}
+
+
 	const tRBUF *pCmd = reinterpret_cast<const tRBUF *>(pdata);
 	unsigned char packettype = pCmd->ICMND.packettype;
 
@@ -690,7 +719,7 @@ void XiaomiGateway::deviceListHandler(Json::Value& root)
 			del_cmd[keyCmd] = "write";
 			del_cmd[keyKey] = "@gatewaykey";
 			del_cmd[keySid] = gwSid;
-			del_cmd[keyParams][0]["remove_device"] = sid;
+			del_cmd[keyParams][0]["unsupported_device"] = sid;
 			message = JSonToRawString (del_cmd);
 			std::shared_ptr<std::string> send_buff(new std::string(message));
 			sendMessageToGateway(message);
@@ -703,13 +732,21 @@ void XiaomiGateway::deviceListHandler(Json::Value& root)
 			std::shared_ptr<Device> dev(new Device (sid, attr));
 			XiaomiGateway::addDeviceToMap(sid, dev);
 			createDtDevice(dev);
+
+			Json::Value read_cmd;
+			read_cmd[keyCmd] = "read";
+			read_cmd[keySid] = sid;
+			message = JSonToRawString (read_cmd);
+			sendMessageToGateway(message);
 		}
 
-		Json::Value read_cmd;
-		read_cmd[keyCmd] = "read";
-		read_cmd[keySid] = sid;
-		message = JSonToRawString (read_cmd);
-		sendMessageToGateway(message);
+		std::string cmd = root[keyCmd].asString();
+		if(cmd == repNewDevList){
+			auto dev = getDevice(sid);
+			dev->updateTimestamp(time(nullptr));
+			setOnlineStatus(dev, true);
+		}
+
 	}
 
 }
@@ -720,8 +757,7 @@ void XiaomiGateway::joinGatewayHandler(Json::Value& root)
 	std::string ip = root["ip"].asString();
 	std::string port =	root["port"].asString();
 
-	if (ip != getGatewayIp())
-	{
+	if (ip != getGatewayIp()){
 		_log.Log(LOG_ERROR, "a new gateway incoming, but not in domoticz hardware list, ip:%s", ip.c_str());
 		return;
 	}
@@ -730,8 +766,7 @@ void XiaomiGateway::joinGatewayHandler(Json::Value& root)
 	m_gwModel = model;
 
 	const DevAttr* attr = XiaomiGateway::findDevAttr(m_gwModel);
-	if(attr == nullptr)
-	{
+	if(attr == nullptr){
 		_log.Log(LOG_ERROR, "No support Gateway model:%s", model.c_str());
 		return;
 	}
@@ -741,12 +776,44 @@ void XiaomiGateway::joinGatewayHandler(Json::Value& root)
 	_log.Log(LOG_STATUS, "Tenbat Gateway(%s) Detected", model.c_str());
 }
 
+void XiaomiGateway::setOnlineStatus(std::shared_ptr<Device>& dev, bool status)
+{
+	OnlineStatus on = dev->getOnline();
+	if ((status && on == OnlineStatus::Online) ||
+		(!status && on == OnlineStatus::Offline)){
+		_log.Log(LOG_STATUS, "device online status already is %d", status);
+		return;
+
+}
+
+	dev->setOnline(status);
+	std::string mac = dev->getMac();
+	auto result = m_sql.safe_query("select Online from DeviceStatus where MAC == '%q'", mac.c_str());
+	if (!result.empty()){
+
+		int online =atoi(result[0][0].c_str());
+		if(status == true && online == 0){
+			m_sql.safe_query("update DeviceStatus set Online=%d  where MAC == '%q'",1, mac.c_str());
+		}
+		else if (status == false && online != 0){
+			m_sql.safe_query("update DeviceStatus set Online=%d  where MAC == '%q'",0, mac.c_str());
+		}
+	}
+}
+
+OnlineStatus XiaomiGateway::getOnlineStatus(std::shared_ptr<Device>& dev)
+{
+	OnlineStatus sta = dev->getOnline();
+	return sta;
+}
+
 void XiaomiGateway::whois(void)
 {
+	_log.Log(LOG_STATUS, "XiaomiGateway:whois thread is running");
+	std::string msg = "{\"cmd\":\"whois\"}";
 	while (1)
 	{
 		boost::this_thread::sleep(boost::posix_time::seconds(10));
-
 		XiaomiGateway* firstGw = NULL;
 		{
 			std::unique_lock<std::mutex> lock(m_gwListMutex);
@@ -754,8 +821,7 @@ void XiaomiGateway::whois(void)
 			firstGw = *it;
 			if (firstGw && !firstGw->isDevInfoInited())
 			{
-				std::string message = "{\"cmd\":\"whois\"}";
-				firstGw->sendMessageToGateway(message, "224.0.0.50", 4321);
+				firstGw->sendMessageToGateway(msg, "224.0.0.50", 4321);
 				_log.Log(LOG_ERROR, "send whois to udp group port 4321");
 			}
 		}
@@ -850,7 +916,6 @@ bool XiaomiGateway::createDtDevice(std::shared_ptr<Device> dev)
 
 	return true;
 }
-
 
 
 void XiaomiGateway::updateTemperature(const std::string &nodeID, const std::string &name, const float temperature, const int battery)
@@ -1024,9 +1089,20 @@ void XiaomiGateway::updateRGBLight(const std::string & nodeId, const unsigned ch
 	lastLevel = atoi(result[0][1].c_str());
 	bright = (brightness == "")? lastLevel : bright;
 
-	if (nValue == gswitch_sOff)
+	if (nValue == gswitch_sOff && (onOff == Color_LedOff || onOff == Color_SetBrightnessLevel))
 	{
-		_log.Log(LOG_ERROR, "led off , do not update all value");
+		_log.Debug(DEBUG_HARDWARE, "Led off , do not  update LedOff and SetBrightnessLevel status report");
+		return;
+	}
+
+	if (nValue >=  gswitch_sOn  && onOff == gswitch_sOn && lastLevel == bright)
+	{
+		_log.Debug(DEBUG_HARDWARE, "The cmd is turn on, but want equal last Level and on");
+		return;
+	}
+	if (onOff == Color_SetBrightnessLevel && lastLevel == bright)
+	{
+		_log.Debug(DEBUG_HARDWARE, "The cmd is set bright, but want equal last Level");
 		return;
 	}
 	SendRGBWSwitch(sID, unit, subType, onOff, bright, color, battery);
@@ -1213,31 +1289,13 @@ void XiaomiGateway::updateKwh(const std::string & nodeID, const std::string & na
 }
 
 
-UdpServer::UdpServer(const std::shared_ptr<boost::asio::io_service> &ioService, const std::string &localIp)
-	: socket_(*ioService, boost::asio::ip::udp::v4())
+UdpServer::UdpServer(const std::string &localIp)
+	: m_socket(m_ioService, boost::asio::ip::udp::v4())
 {
+	_log.Log(LOG_STATUS, "UdpServer use localIp:%s", localIp.c_str());
 	m_localIp = localIp;
-	setIoService(ioService);
-	std::cout<<"UdpServer and localIp"<<localIp<<std::endl;
-}
-
-UdpServer::~UdpServer()
-{
-	if (UdpServer::getIoService()){
-		_log.Log(LOG_STATUS, "io service is still work");
-	}
-
-	if (UdpServer::getUdpServer()){
-		_log.Log(LOG_STATUS, "upd server is still work");
-	}
-	_log.Log(LOG_STATUS, "~~UdpServer");
-}
-
-bool UdpServer::initServer()
-{
-
 	try {
-		socket_.set_option(boost::asio::ip::udp::socket::reuse_address(true));
+		m_socket.set_option(boost::asio::ip::udp::socket::reuse_address(true));
 		_log.Log(LOG_ERROR, "XiaomiGateway: UdpServer m_localip： %s", UdpServer::m_localIp.c_str());
 
 		if (UdpServer::m_localIp != "") {
@@ -1246,22 +1304,37 @@ bool UdpServer::initServer()
 			boost::asio::ip::address mcastAddr = boost::asio::ip::address::from_string("224.0.0.50", ec);
 			boost::asio::ip::udp::endpoint listenEndpoint(mcastAddr, 9898);
 
-			socket_.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 9898));
-			socket_.set_option(boost::asio::ip::multicast::join_group(mcastAddr.to_v4(), listenAddr.to_v4()), ec);
-			socket_.bind(listenEndpoint, ec);
+			m_socket.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 9898));
+			m_socket.set_option(boost::asio::ip::multicast::join_group(mcastAddr.to_v4(), listenAddr.to_v4()), ec);
+			m_socket.bind(listenEndpoint, ec);
 		}
 		else {
-			socket_.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 9898));
-			socket_.set_option(boost::asio::ip::multicast::join_group(boost::asio::ip::address::from_string("224.0.0.50")));
+			m_socket.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 9898));
+			m_socket.set_option(boost::asio::ip::multicast::join_group(boost::asio::ip::address::from_string("224.0.0.50")));
 		}
 	}
 	catch (const boost::system::system_error& ex) {
 
 		_log.Log(LOG_ERROR, "XiaomiGateway: %s", ex.code().category().name());
-		resetIoService();
-		return false;
+		return;
 	}
 	startReceive();
+}
+
+UdpServer::~UdpServer()
+{
+	m_socket.close();
+	if (UdpServer::getUdpServer() != nullptr){
+		_log.Log(LOG_STATUS, "upd server is still work");
+	}
+	_log.Log(LOG_STATUS, "~~UdpServer");
+	UdpServer::m_isRun = false;
+}
+
+bool UdpServer::initServer()
+{
+
+
 
 	return true;
 }
@@ -1270,30 +1343,22 @@ bool UdpServer::initServer()
 void UdpServer::startReceive()
 {
 	memset(&data_[0], 0, sizeof(data_));
-	socket_.async_receive_from(boost::asio::buffer(data_, max_length), remote_endpoint_, boost::bind(&UdpServer::handleReceive, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+	m_socket.async_receive_from(boost::asio::buffer(data_, max_length), m_remoteEndpoint, boost::bind(&UdpServer::handleReceive, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 }
 
 
 bool UdpServer::run()
 {
-	auto io = UdpServer::getIoService();
-	if (io)
-	{
-		m_serThread = boost::thread(boost::bind(&boost::asio::io_service::run, io.get()));
-		SetThreadName(m_serThread.native_handle(), "XiaomiGwIO");
-		return true;
-	}
-	return false;
+	m_serThread = boost::thread(boost::bind(&boost::asio::io_service::run, &m_ioService));
+	SetThreadName(m_serThread.native_handle(), "XiaomiGwIO");
+	return true;
 }
 
 void UdpServer::stop()
 {
 	std::cout<<"UdpServer stop"<<std::endl;
-	auto io = UdpServer::getIoService();
-	io->stop();
+	m_ioService.stop();
 	m_serThread.join();
-	UdpServer::resetIoService();
-	UdpServer::resetUdpServer();
 }
 
 
@@ -1357,7 +1422,8 @@ bool UdpServer::recvParamCheck(Json::Value& root)
 	}
 
 
-	if (cmd == rspDiscorey)
+	if (cmd == rspDiscorey ||
+		cmd == repNewDevList)
 	{
 		if (false == root.isMember(keySid) ||
 			false == root.isMember(keyToken)||
@@ -1461,7 +1527,7 @@ void UdpServer::handleReceive(const boost::system::error_code & error, std::size
 		return;
 	}
 
-	std::string remoteAddr = remote_endpoint_.address().to_v4().to_string();
+	std::string remoteAddr = m_remoteEndpoint.address().to_v4().to_string();
 	XiaomiGateway * gateway = XiaomiGateway::getGatewayByIp(remoteAddr);
 	if (!gateway){
 		_log.Log(LOG_ERROR, "XiaomiGateway: received data from  unregisted gateway ip:%s!", remoteAddr.c_str());
@@ -1522,12 +1588,15 @@ void UdpServer::handleReceive(const boost::system::error_code & error, std::size
 		param.message  = message;
 		param.miGateway = static_cast<void*>(gateway);
 		dev->recvFrom(param);
+		gateway->setOnlineStatus(dev, true);
+
 		startReceive();
 		return;
 	}
 
 
-	if (cmd == rspDiscorey){
+	if (cmd == rspDiscorey ||
+		cmd == repNewDevList){
 		gateway->deviceListHandler(root);
 		startReceive();
 		return;
@@ -1615,7 +1684,7 @@ namespace http {
 
 			int iHardwareID = atoi(hwid.c_str());
 			CDomoticzHardwareBase *pHardware = m_mainworker.GetHardware(iHardwareID);
-			if (pHardware == NULL){
+			if (pHardware == nullptr){
 				_log.Log(LOG_ERROR, "AddZigbeeDevice hardware is not find");
 				return;
 			}
@@ -1662,6 +1731,12 @@ namespace http {
 
 			catch(std::exception& e){
 				_log.Log(LOG_ERROR, "get random(%s) or hardware(%s) id failed:%s", random.c_str(), hwid.c_str(), e.what());
+			}
+
+			CDomoticzHardwareBase* hardware = m_mainworker.GetHardware(iHardwareID);
+			if (nullptr == hardware){
+				_log.Log(LOG_ERROR, "GetNewDevicesList hardware is not find");
+				return;
 			}
 
 			std::cout<<"business random:"<<sRandom<< "  now:"<<tmp<<std::endl;

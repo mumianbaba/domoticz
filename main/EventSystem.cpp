@@ -1493,15 +1493,15 @@ void CEventSystem::EventQueueThread()
 }
 
 void CEventSystem::ProcessDevice(
-	const int HardwareID, 
-	const uint64_t ulDevID, 
-	const unsigned char unit, 
-	const unsigned char devType, 
-	const unsigned char subType, 
-	const unsigned char signallevel, 
-	const unsigned char batterylevel, 
-	const int nValue, 
-	const char* sValue, 
+	const int HardwareID,
+	const uint64_t ulDevID,
+	const unsigned char unit,
+	const unsigned char devType,
+	const unsigned char subType,
+	const unsigned char signallevel,
+	const unsigned char batterylevel,
+	const int nValue,
+	const char* sValue,
 	const std::string &devname)
 {
 	if (!m_bEnabled)
@@ -1513,7 +1513,7 @@ void CEventSystem::ProcessDevice(
 	{
 		//inpossible as we just updated it
 		_log.Log(LOG_ERROR, "EventSystem: Could not find device in system: ((ID=%" PRIu64 ": %s)", ulDevID, devname.c_str());
-		return; 
+		return;
 	}
 
 	std::vector<std::string> sd = result[0];
@@ -1751,9 +1751,9 @@ lua_State *CEventSystem::CreateBlocklyLuaState()
 	lua_setglobal(lua_state, "print");
 
 	boost::shared_lock<boost::shared_mutex> devicestatesMutexLock(m_devicestatesMutex);
-	
+
 	CLuaTable luaTable(lua_state, "device", (int)m_devicestates.size(), 0);
-	
+
 	std::map<uint64_t, _tDeviceStatus>::iterator iterator;
 	for (iterator = m_devicestates.begin(); iterator != m_devicestates.end(); ++iterator) {
 		_tDeviceStatus sitem = iterator->second;
@@ -1763,7 +1763,7 @@ lua_State *CEventSystem::CreateBlocklyLuaState()
 	devicestatesMutexLock.unlock();
 
 	boost::shared_lock<boost::shared_mutex> uservariablesMutexLock(m_uservariablesMutex);
-	
+
 	luaTable.InitTable(lua_state, "variable", (int)m_uservariables.size(), 0);
 
 	std::map<uint64_t, _tUserVariable>::const_iterator ittvar;
@@ -2714,7 +2714,7 @@ void CEventSystem::ExportDeviceStatesToLua(lua_State *lua_state, const _tEventQu
 			item.sValue : iterator->second.sValue);
 	}
 	luaTable.Publish();
-	
+
 	luaTable.InitTable(lua_state, "otherdevices_idx", (int)m_devicestates.size(), 0);
 	for (iterator = m_devicestates.begin(); iterator != m_devicestates.end(); ++iterator)
 	{
@@ -3587,25 +3587,25 @@ void CEventSystem::WriteToLog(const std::string &devNameNoQuotes, const std::str
 	}
 }
 
-bool CEventSystem::ScheduleEvent(std::string deviceName, const std::string &Action, const std::string &eventName)
+bool CEventSystem::ScheduleEvent(std::string deviceIdent, const std::string &Action, const std::string &eventName)
 {
 	std::vector<std::vector<std::string> > result;
 	bool isScene = false;
 	int sceneType = 0;
 
-	if ((deviceName.find("Scene:") == 0) || (deviceName.find("Group:") == 0))
+	if ((deviceIdent.find("Scene:") == 0) || (deviceIdent.find("Group:") == 0))
 	{
 		isScene = true;
 		sceneType = 1;
-		if (deviceName.find("Group:") == 0) {
+		if (deviceIdent.find("Group:") == 0) {
 			sceneType = 2;
 		}
-		deviceName = deviceName.substr(6);
+		deviceIdent = deviceIdent.substr(6);
 	}
-	else if (deviceName.find("SendCamera:") == 0)
+	else if (deviceIdent.find("SendCamera:") == 0)
 	{
-		deviceName = deviceName.substr(11);
-		result = m_sql.safe_query("SELECT Name FROM Cameras WHERE (ID == '%q')", deviceName.c_str());
+		deviceIdent = deviceIdent.substr(11);
+		result = m_sql.safe_query("SELECT Name FROM Cameras WHERE (ID == '%q')", deviceIdent.c_str());
 		if (result.empty())
 			return false;
 
@@ -3617,20 +3617,20 @@ bool CEventSystem::ScheduleEvent(std::string deviceName, const std::string &Acti
 		std::string subject = parseResult.sCommand;
 		if (parseResult.fAfterSec < (1. / timer_resolution_hz / 2))
 		{
-			m_mainworker.m_cameras.EmailCameraSnapshot(deviceName, subject);
+			m_mainworker.m_cameras.EmailCameraSnapshot(deviceIdent, subject);
 		}
 		else
-			m_sql.AddTaskItem(_tTaskItem::EmailCameraSnapshot(parseResult.fAfterSec, deviceName, subject));
+			m_sql.AddTaskItem(_tTaskItem::EmailCameraSnapshot(parseResult.fAfterSec, deviceIdent, subject));
 		return true;
 	}
 
 	if (isScene) {
 		result = m_sql.safe_query("SELECT ID FROM Scenes WHERE (Name == '%q')",
-			deviceName.c_str());
+			deviceIdent.c_str());
 	}
 	else {
-		result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (Name == '%q')",
-			deviceName.c_str());
+		result = m_sql.safe_query("SELECT ID FROM DeviceStatus WHERE (ID == '%q')",
+			deviceIdent.c_str());
 	}
 	if (!result.empty())
 	{
@@ -4244,6 +4244,209 @@ namespace http {
 				}
 			}
 			redirect_uri = root.toStyledString();
+		}
+
+		void CWebServer::RType_AddStrategyLog(WebEmSession & session, const request& req, Json::Value &root)
+		{
+			std::string sStrategyid = request::findValue(&req, "st_id");
+			std::string sStrategyType = request::findValue(&req, "st_type");
+			std::string sStatus = request::findValue(&req, "status");
+			_log.Debug(DEBUG_WEBSERVER, "WebServer(RType_AddStrategyLog)");
+			if (
+				(sStrategyid.empty()) ||
+				(sStrategyType.empty()) ||
+				(sStatus.empty())
+				){
+					_log.Log(LOG_ERROR, "WebServer(RType_AddStrategyLog) 'st_id', 'st_type' or 'status' is empty");
+					root["status"] = "ERR";
+					root["title"] = "AddStrategyLog";
+					root["reason"] = "'st_id', 'st_type' or 'status' is empty";
+					return;
+				}
+
+			uint64_t strategyid = std::strtoull(sStrategyid.c_str(), nullptr, 10);
+			int status = atoi(sStatus.c_str());
+
+			std::vector<std::vector<std::string> > result;
+			m_sql.safe_query("INSERT INTO StrategyLog (StrategyRowID, StrategyType, Status) VALUES ('%" PRIu64 "', '%q', '%d')", strategyid, sStrategyType.c_str(), status);
+			result = m_sql.safe_query("SELECT LAST_INSERT_ROWID() StrategyLog");
+			if (result.empty()){
+				_log.Log(LOG_ERROR, "WebServer(RType_AddStrategyLog) insert error");
+				return;
+			}
+
+			// unsigned char logID = std::strtoull(result[0][0].c_str(), nullptr, 10);
+			unsigned char logID = atoi(result[0][0].c_str());
+			root["status"] = "OK";
+			root["title"] = "AddStrategyLog";
+			root["idx"] = logID;
+		}
+
+#if 0
+		void CWebServer::RType_DeleteStrategyLog(WebEmSession & session, const request& req, Json::Value &root)
+		{
+			std::string sStrategyid = request::findValue(&req, "st_id");
+			std::string sStrategyType = request::findValue(&req, "st_type");
+			_log.Debug(DEBUG_WEBSERVER, "WebServer(RType_DeleteStrategyLog)");
+
+			if (
+				(sStrategyid.empty()) ||
+				(sStrategyType.empty())
+				){
+					_log.Log(LOG_ERROR, "WebServer(RType_DeleteStrategyLog) 'st_id' or 'st_type' is empty");
+					root["status"] = "ERR";
+					root["title"] = "DeleteStrategyLog";
+					root["reason"] = "'st_id' or 'st_type' is empty";
+					return;
+				}
+
+			uint64_t strategyid = std::strtoull(sStrategyid.c_str(), nullptr, 10);
+
+			m_sql.safe_query("DELETE FROM StrategyLog WHERE (StrategyRowID=='%" PRIu64 "' and StrategyType=='%q')", strategyid, sStrategyType.c_str());
+			root["status"] = "OK";
+			root["title"] = "DeleteStrategyLog";
+		}
+#endif
+
+		void CWebServer::RType_DeleteStrategyLog(WebEmSession & session, const request& req, Json::Value &root)
+		{
+			std::string sAll = request::findValue(&req, "all");
+			std::string sLogID = request::findValue(&req, "idx");
+			std::string sStrategyid = request::findValue(&req, "st_id");
+			std::string sStrategyType = request::findValue(&req, "st_type");
+			std::string sSql = "DELETE FROM StrategyLog";
+
+			unsigned char logID = atoi(sLogID.c_str());
+			_log.Debug(DEBUG_WEBSERVER, "WebServer(RType_DeleteStrategyLog)");
+
+			if (!(sAll == "false" || sAll == "true")) {
+				_log.Log(LOG_ERROR, "WebServer(DeleteStrategyLog) 'all' is not 'true' or 'false'.");
+				root["status"] = "ERR";
+				root["title"] = "DeleteStrategyLog";
+				root["reason"] = "'all' is not 'true' or 'false'.";
+				return;
+			}
+
+			if (sAll == "false"){
+				std::string condiction = " WHERE 1";
+				if (
+					!(!sLogID.empty() || (!sStrategyid.empty() and !sStrategyType.empty()))
+				){
+					_log.Log(LOG_ERROR, "WebServer(RType_DeleteStrategyLog) 'idx' or 'st_id-st_type' is empty");
+					root["status"] = "ERR";
+					root["title"] = "DeleteStrategyLog";
+					root["reason"] = "'idx' or 'st_id-st_type' is empty";
+					return;
+				}
+
+				if (!sLogID.empty()) {
+					stdreplace(sLogID, ";", "','");
+					sLogID = "'" + sLogID + "'";
+					condiction = condiction + " AND LogRowID IN(" + sLogID + ") ";
+				}
+				if (!sStrategyType.empty() and !sStrategyType.empty()) {
+					condiction = condiction + " OR (StrategyType=='" + sStrategyType + "' ";
+					condiction = condiction + " AND StrategyRowID=='" + sStrategyid + "') ";
+				}
+
+				sSql = sSql + " " + condiction;
+			}
+			_log.Debug(DEBUG_WEBSERVER, sSql);
+
+			m_sql.safe_query(sSql.c_str());
+			root["status"] = "OK";
+			root["title"] = "DeleteStrategyLog";
+		}
+
+		void CWebServer::RType_UpdateStrategyLog(WebEmSession & session, const request& req, Json::Value &root)
+		{
+			std::string sLogID = request::findValue(&req, "idx");
+			std::string sStatus = request::findValue(&req, "status");
+			_log.Debug(DEBUG_WEBSERVER, "WebServer(RType_UpdateStrategyLog)");
+
+			if (
+				(sLogID.empty()) ||
+				(sStatus.empty())
+				){
+					_log.Log(LOG_ERROR, "WebServer(UpdateStrategyLog) 'idx' or 'status' is empty");
+					root["status"] = "ERR";
+					root["title"] = "UpdateStrategyLog";
+					root["reason"] = "'idx' or 'status' is empty";
+					return;
+				}
+
+			unsigned char logID = atoi(sLogID.c_str());
+			int status = atoi(sStatus.c_str());
+
+			m_sql.safe_query("UPDATE StrategyLog SET Status=%d WHERE (LogRowID=='%d')", status, logID);
+			root["status"] = "OK";
+			root["title"] = "UpdateStrategyLog";
+		}
+
+		void CWebServer::RType_GetStrategyLog(WebEmSession & session, const request& req, Json::Value &root)
+		{
+			std::string sAll = request::findValue(&req, "all");
+			std::string sStrategyid = request::findValue(&req, "st_id");
+			std::string sStrategyType = request::findValue(&req, "st_type");
+			std::string preSql = "SELECT RowID, StrategyRowID, StrategyType, Status, Date";
+			std::string condiction = "";
+			std::string sSql = "";
+
+			std::vector<std::vector<std::string> > result;
+			_log.Debug(DEBUG_WEBSERVER, "WebServer(RType_GetStrategyLog)");
+
+			if (sAll.empty()){
+				_log.Log(LOG_ERROR, "WebServer(GetStrategyLog) 'all' is empty.");
+				root["status"] = "ERR";
+				root["title"] = "GetStrategyLog";
+				root["reason"] = "'all' is empty.";
+				return;
+			}
+
+			if (sAll == "true") {
+				condiction = "WHERE 1";
+				sSql = getSqlBaseCurcor(preSql, "StrategyLog", condiction, true, req);
+			} else if (sAll == "false"){
+				if (sStrategyType.empty()){
+					_log.Log(LOG_ERROR, "WebServer(GetStrategyLog) 'st_type' is empty.");
+					root["status"] = "ERR";
+					root["title"] = "GetStrategyLog";
+					root["reason"] = "'st_type' is empty.";
+					return;
+				}
+				condiction = "WHERE StrategyType=='" + sStrategyType + "'";
+				if (!sStrategyid.empty()){
+					condiction = condiction + " AND StrategyRowID=='" + sStrategyid + "'";
+				}
+				sSql = getSqlBaseCurcor(preSql, "StrategyLog", condiction, true, req);
+
+			} else {
+				_log.Log(LOG_ERROR, "WebServer(GetStrategyLog) 'all' is not 'true' or 'false'.");
+				root["status"] = "ERR";
+				root["title"] = "GetStrategyLog";
+				root["reason"] = "'all' is not 'true' or 'false'.";
+				return;
+			}
+			_log.Debug(DEBUG_WEBSERVER, sSql);
+
+			result = m_sql.safe_query(sSql.c_str());
+			if (!result.empty()){
+				int ii = 0;
+				for (const auto & itt : result)
+				{
+					std::vector<std::string> sd = itt;
+
+					root["result"][ii]["idx"] 		= atoi(sd[0].c_str());
+					root["result"][ii]["st_id"] 	= atoi(sd[1].c_str());
+					root["result"][ii]["st_type"] 	= sd[2];
+					root["result"][ii]["status"] 	= atoi(sd[3].c_str());
+					root["result"][ii]["date"] 		= sd[4];
+					ii++;
+				}
+			}
+
+			root["status"] = "OK";
+			root["title"] = "GetStrategyLog";
 		}
 
 		void CWebServer::RType_Events(WebEmSession & session, const request& req, Json::Value &root)

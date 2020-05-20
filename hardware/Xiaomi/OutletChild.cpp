@@ -890,16 +890,21 @@ bool LedOutlet::recvFrom(const ReadParam& param) const
 	XiaomiGateway* gw = static_cast<XiaomiGateway*>(miGateway);
 
 	status = boost::get<1>(result[0]);
-	if (!status.empty())
+	level = boost::get<1>(result[1]);
+	if (!status.empty() || !level.empty())
 	{
 		int onoff = -1;
 		if (status == "on")
 		{
-			onoff == Color_LedOn;
+			onoff = Color_LedOn;
 		}
 		else if (status == "off")
 		{
-			onoff == Color_LedOff;
+			onoff = Color_LedOff;
+		}
+		else  if (!level.empty())
+		{
+			onoff = Color_SetBrightnessLevel;
 		}
 		else
 		{
@@ -912,7 +917,6 @@ bool LedOutlet::recvFrom(const ReadParam& param) const
 	switch(m_type)
 	{
 		case LedType::LedTemp:
-			level = boost::get<1>(result[1]);
 			colorTemp = boost::get<1>(result[2]);
 			if (!colorTemp.empty())
 			{
@@ -931,7 +935,6 @@ bool LedOutlet::recvFrom(const ReadParam& param) const
 
 		break;
 		case LedType::LedRGB:
-			level = boost::get<1>(result[1]);
 			ledRGB = boost::get<1>(result[2]);
 			if (!ledRGB.empty())
 			{
@@ -950,7 +953,6 @@ bool LedOutlet::recvFrom(const ReadParam& param) const
 			}
 		break;
 		case LedType::LedRGBTemp:
-			level = boost::get<1>(result[1]);
 			ledRGB = boost::get<1>(result[2]);
 			colorTemp = boost::get<1>(result[3]);
 			try{
@@ -990,6 +992,10 @@ bool LedOutlet::recvFrom(const ReadParam& param) const
 			return false;
 		break;
 	}
+
+	if (color.mode == ColorModeNone){
+		return false;
+	}
 	gw->updateRGBLight(mac, getUnit(), getSubType(), Color_SetColor, level, color, battery);
 	return true;
 }
@@ -1017,14 +1023,12 @@ bool LedOutlet::writeTo(const WriteParam&  param) const
 
 	if (xcmd->command == gswitch_sOn)
 	{
-		root["params"][0]["light_rgb"] = 0x32ffffff;
-		root["params"][1]["power_status"] = "on";
+		root["params"][0]["power_status"] = "on";
 		commit = true;
 	}
 	else if (xcmd->command == gswitch_sOff)
 	{
-		root["params"][0]["light_rgb"] = 0;
-		root["params"][1]["power_status"] = "off";
+		root["params"][0]["power_status"] = "off";
 		commit = true;
 	}
 	else if (xcmd->command == Color_SetBrightnessLevel)
@@ -1032,7 +1036,7 @@ bool LedOutlet::writeTo(const WriteParam&  param) const
 		unsigned int bright = (unsigned int)xcmd->value;
 		bright = (bright > 100)? 100 : bright;
 		root["params"][0]["light_level"] = bright;
-		//root["params"][1]["power_status"] = "on";
+		//root["params"][1]["power_status"] = "on"; /* a error when scence*/
 		commit = true;
 	}
 
@@ -1070,7 +1074,6 @@ bool LedOutlet::writeTo(const WriteParam&  param) const
 
 			bright = (bright > 100)? 100 : bright;
 			cTemp = (cTemp > 100)? 100 : cTemp;
-
 			root["params"][0]["color_temp"] = cTemp;
 			root["params"][1]["light_level"] = bright;
 		}

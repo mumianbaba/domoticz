@@ -26,19 +26,19 @@ return {
 		device.playlistID = data.data.levelVal
 
 		function device.switchOff()
-			return TimedCommand(domoticz, device.name, 'Off', 'device', device.state)
+			return TimedCommand(domoticz, device.id, 'Off', 'device', device.state)
 		end
 
 		function device.stop()
-			return TimedCommand(domoticz, device.name, 'Stop', 'device', device.state)
+			return TimedCommand(domoticz, device.id, 'Stop', 'device', device.state)
 		end
 
 		function device.play()
-			return TimedCommand(domoticz, device.name, 'Play', 'device', device.state)
+			return TimedCommand(domoticz, device.id, 'Play', 'device', device.state)
 		end
 
 		function device.pause()
-			return TimedCommand(domoticz, device.name, 'Pause', 'device', device.state)
+			return TimedCommand(domoticz, device.id, 'Pause', 'device', device.state)
 		end
 
 		function device.setVolume(value)
@@ -47,12 +47,12 @@ return {
 			if (value < 0 or value > 100) then
 				utils.log('Volume must be between 0 and 100. Value = ' .. tostring(value), utils.LOG_ERROR)
 			else
-				return TimedCommand(domoticz, device.name, 'Set Volume ' .. tostring(value), 'device', device.state)
+				return TimedCommand(domoticz, device.id, 'Set Volume ' .. tostring(value), 'device', device.state)
 			end
 		end
 
 		function device.startPlaylist(name)
-			return TimedCommand(domoticz, device.name, 'Play Playlist ' .. tostring(name), 'updatedevice', device.state)
+			return TimedCommand(domoticz, device.id, 'Play Playlist ' .. tostring(name), 'updatedevice', device.state)
 		end
 
 		function device.playFavorites(position)
@@ -62,7 +62,7 @@ return {
 				position = 0
 			end
 
-			return TimedCommand(domoticz, device.name, 'Play Favorites ' .. tostring(position), 'updatedevice', device.state)
+			return TimedCommand(domoticz, device.id, 'Play Favorites ' .. tostring(position), 'updatedevice', device.state)
 		end
 
 		function device.volumeDown()

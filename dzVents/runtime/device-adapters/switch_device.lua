@@ -81,7 +81,7 @@ return {
 				if (current ~= nil) then
 					inv = current.inv
 					if (inv ~= nil) then
-						return TimedCommand(domoticz, device.name, inv, 'device')
+						return TimedCommand(domoticz, device.id, inv, 'device')
 					end
 				end
 			end
@@ -89,31 +89,31 @@ return {
 		end
 
 		function device.switchOn()
-			return TimedCommand(domoticz, device.name, 'On', 'device', device.state)
+			return TimedCommand(domoticz, device.id, 'On', 'device', device.state)
 		end
 
 		function device.switchOff()
-			return TimedCommand(domoticz, device.name, 'Off', 'device', device.state)
+			return TimedCommand(domoticz, device.id, 'Off', 'device', device.state)
 		end
 
 		function device.close()
-			return TimedCommand(domoticz, device.name, ( utils.inTable(blindsOff2Close, device.switchType ) and 'On') or 'Off', 'device', device.state)
+			return TimedCommand(domoticz, device.id, ( utils.inTable(blindsOff2Close, device.switchType ) and 'On') or 'Off', 'device', device.state)
 		end
 
 		function device.open()
-			return TimedCommand(domoticz, device.name, ( utils.inTable(blindsOff2Close, device.switchType ) and 'Off') or 'On', 'device', device.state)
+			return TimedCommand(domoticz, device.id, ( utils.inTable(blindsOff2Close, device.switchType ) and 'Off') or 'On', 'device', device.state)
 		end
 
 		function device.stop() -- blinds
-			return TimedCommand(domoticz, device.name, 'Stop', 'device', device.state)
+			return TimedCommand(domoticz, device.id, 'Stop', 'device', device.state)
 		end
 
 		function device.dimTo(percentage)
-			return TimedCommand(domoticz, device.name, 'Set Level ' .. tostring(percentage), 'device')
+			return TimedCommand(domoticz, device.id, 'Set Level ' .. tostring(percentage), 'device')
 		end
 
 		function device.setLevel(percentage)
-			return TimedCommand(domoticz, device.name, 'Set Level ' .. tostring(percentage), 'device')
+			return TimedCommand(domoticz, device.id, 'Set Level ' .. tostring(percentage), 'device')
 		end
 
 		function device.switchSelector(level)
@@ -141,7 +141,7 @@ return {
 			elseif not level then
 				utils.log('level cannot be nil', domoticz.LOG_ERROR )
 			else
-				return TimedCommand(domoticz, device.name, 'Set Level ' .. guardLevel(level), 'device', level, device.level)
+				return TimedCommand(domoticz, device.id, 'Set Level ' .. guardLevel(level), 'device', level, device.level)
 			end
 
 		end

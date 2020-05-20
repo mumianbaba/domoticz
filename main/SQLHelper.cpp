@@ -59,6 +59,7 @@ const char *sqlCreateDeviceStatus =
 "[BatteryLevel] INTEGER DEFAULT 0, "
 "[nValue] INTEGER DEFAULT 0, "
 "[sValue] VARCHAR(200) DEFAULT null, "
+"[Online] INTEGER DEFAULT 0, "
 "[LastUpdate] DATETIME DEFAULT (datetime('now','localtime')),"
 "[Order] INTEGER BIGINT(10) default 0, "
 "[AddjValue] FLOAT DEFAULT 0, "
@@ -93,6 +94,14 @@ const char *sqlCreateSceneLog =
 "[SceneRowID] BIGINT(10) NOT NULL, "
 "[nValue] INTEGER DEFAULT 0, "
 "[User] VARCHAR(100) DEFAULT (''), "
+"[Date] DATETIME DEFAULT (datetime('now','localtime')));";
+
+const char *sqlCreateStrategyLog =
+"CREATE TABLE IF NOT EXISTS [StrategyLog] ("
+"[LogRowID] INTEGER PRIMARY KEY AUTOINCREMENT, "
+"[StrategyRowID] BIGINT(10) NOT NULL, "
+"[StrategyType] VARCHAR(100) DEFAULT (''), "
+"[Status] INTEGER DEFAULT 0, "
 "[Date] DATETIME DEFAULT (datetime('now','localtime')));";
 
 const char *sqlCreatePreferences =
@@ -681,7 +690,18 @@ bool CSQLHelper::OpenDatabase()
 	int dbversion = 0;
 	if (!bNewInstall)
 	{
-		GetPreferencesVar("DB_Version", dbversion);
+		bool res = GetPreferencesVar("DB_Version", dbversion);
+		if (res == false)
+		{
+			_log.Log(LOG_ERROR, "DB_Version get failed when not first install, fatal error");
+			_log.Log(LOG_ERROR, "DB_Version get failed when not first install, fatal error");
+			_log.Log(LOG_ERROR, "DB_Version get failed when not first install, fatal error");
+			_log.Log(LOG_ERROR, "DB_Version get failed when not first install, fatal error");
+			_log.Log(LOG_ERROR, "DB_Version get failed when not first install, fatal error");
+			_log.Log(LOG_ERROR, "DB_Version get failed when not first install, fatal error");
+			return false;
+		}
+		_log.Log(LOG_STATUS, "DB_Version get successful, dbversion:%d", dbversion);
 		if (dbversion > DB_VERSION)
 		{
 			//User is using a newer database on a old Domoticz version
@@ -699,6 +719,7 @@ bool CSQLHelper::OpenDatabase()
 	query(sqlCreateDeviceStatusTrigger);
 	query(sqlCreateLightingLog);
 	query(sqlCreateSceneLog);
+	query(sqlCreateStrategyLog);
 	query(sqlCreatePreferences);
 	query(sqlCreateRain);
 	query(sqlCreateRain_Calendar);
@@ -765,6 +786,7 @@ bool CSQLHelper::OpenDatabase()
 	query("create index if not exists ll_id_date_idx  on LightingLog(DeviceRowID, Date);");
 	query("create index if not exists sl_id_idx       on SceneLog(SceneRowID);");
 	query("create index if not exists sl_id_date_idx  on SceneLog(SceneRowID, Date);");
+	query("create index if not exists sl_id_log_idx   on StrategyLog(LogRowID);");
 	query("create index if not exists m_id_idx        on Meter(DeviceRowID);");
 	query("create index if not exists m_id_date_idx   on Meter(DeviceRowID, Date);");
 	query("create index if not exists mc_id_idx       on Meter_Calendar(DeviceRowID);");
@@ -2000,6 +2022,7 @@ bool CSQLHelper::OpenDatabase()
 			query("create index if not exists ll_id_date_idx  on LightingLog(DeviceRowID, Date);");
 			query("create index if not exists sl_id_idx       on SceneLog(SceneRowID);");
 			query("create index if not exists sl_id_date_idx  on SceneLog(SceneRowID, Date);");
+			query("create index if not exists sl_id_log_idx   on StrategyLog(LogRowID);");
 			query("create index if not exists m_id_idx        on Meter(DeviceRowID);");
 			query("create index if not exists m_id_date_idx   on Meter(DeviceRowID, Date);");
 			query("create index if not exists mc_id_idx       on Meter_Calendar(DeviceRowID);");
@@ -2663,8 +2686,8 @@ bool CSQLHelper::OpenDatabase()
                         		}
                 		}
         		}
-		} 
-    
+		}
+
 		if (dbversion < 137)
 		{
 			// Patch for OpenWebNetTCP: update unit and deviceID for Alert devices, update subtype for GeneralSwitch devices
@@ -2741,7 +2764,7 @@ bool CSQLHelper::OpenDatabase()
 				query("ALTER TABLE SceneLog ADD COLUMN [User] VARCHAR(100) DEFAULT ('')");
 			}
 		}
-	} 
+	}
 	else if (bNewInstall)
 	{
 		//place here actions that needs to be performed on new databases
@@ -2758,10 +2781,62 @@ bool CSQLHelper::OpenDatabase()
 	{
 		UpdatePreferencesVar("Title", "Domoticz");
 	}
+
+	/* light and scene log setting */
 	if ((!GetPreferencesVar("LightHistoryDays", nValue)) || (nValue == 0))
 	{
-		UpdatePreferencesVar("LightHistoryDays", 30);
+		UpdatePreferencesVar("LightHistoryDays", 120); /* 120 days */
 	}
+	if ((!GetPreferencesVar("LightLogTableMaxSize", nValue)) || (nValue == 0))
+	{
+		UpdatePreferencesVar("LightLogTableMaxSize", 9000);
+	}
+	if ((!GetPreferencesVar("LightLogMaxPerDev", nValue)) || (nValue == 0))
+	{
+		UpdatePreferencesVar("LightLogMaxPerDev", 300);
+	}
+	if ((!GetPreferencesVar("SceneLogTableMaxSize", nValue)) || (nValue == 0))
+	{
+		UpdatePreferencesVar("SceneLogTableMaxSize", 2000);
+	}
+	if ((!GetPreferencesVar("SceneLogMaxPerDev", nValue)) || (nValue == 0))
+	{
+		UpdatePreferencesVar("SceneLogMaxPerDev", 100);
+	}
+	if ((!GetPreferencesVar("StrategyLogTableMaxSize", nValue)) || (nValue == 0))
+	{
+		UpdatePreferencesVar("StrategyLogTableMaxSize", 2000);
+	}
+	if ((!GetPreferencesVar("StrategyLogMaxPerDev", nValue)) || (nValue == 0))
+	{
+		UpdatePreferencesVar("StrategyLogMaxPerDev", 100);
+	}
+
+
+		/* light and scene log setting */
+	if ((!GetPreferencesVar("CalendarHistoryYears", nValue)) || (nValue == 0))
+	{
+		UpdatePreferencesVar("CalendarHistoryYears", 1);
+	}
+	if ((!GetPreferencesVar("CalendarTableMaxSize", nValue)) || (nValue == 0))
+	{
+		UpdatePreferencesVar("CalendarTableMaxSize", 2000);
+	}
+	if ((!GetPreferencesVar("CalendarMinCount", nValue)) || (nValue == 0))
+	{
+		UpdatePreferencesVar("CalendarMinCount", 120);
+	}
+
+	if ((!GetPreferencesVar("SampleTableMaxSize", nValue)) || (nValue == 0))
+	{
+		UpdatePreferencesVar("SampleTableMaxSize", 3000 );
+	}
+	if ((!GetPreferencesVar("SampleMinCount", nValue)) || (nValue == 0))
+	{
+		UpdatePreferencesVar("SampleMinCount", 70);
+	}
+
+
 	if ((!GetPreferencesVar("MeterDividerEnergy", nValue)) || (nValue == 0))
 	{
 		UpdatePreferencesVar("MeterDividerEnergy", 1000);
@@ -3180,13 +3255,13 @@ bool CSQLHelper::OpenDatabase()
 	{
 		UpdatePreferencesVar("ShowUpdateEffect", 0);
 	}
-	nValue = 5;
+	nValue = 10;
 	if (!GetPreferencesVar("ShortLogInterval", nValue))
 	{
 		UpdatePreferencesVar("ShortLogInterval", nValue);
 	}
 	if (nValue < 1)
-		nValue = 5;
+		nValue = 10;
 	m_ShortLogInterval = nValue;
 
 	if (!GetPreferencesVar("SendErrorsAsNotification", nValue))
@@ -3203,6 +3278,15 @@ bool CSQLHelper::OpenDatabase()
 	if (!GetPreferencesVar("EmailEnabled", nValue))
 	{
 		UpdatePreferencesVar("EmailEnabled", 1);
+	}
+	if ((!GetPreferencesVar("Location", sValue)) || (sValue.empty()))
+	{
+		// defalut RU
+		UpdatePreferencesVar("Location", "65.067703;116.8564");
+	}
+	if ((!GetPreferencesVar("WebLocalNetworks", sValue)) || (sValue.empty()))
+	{
+		UpdatePreferencesVar("WebLocalNetworks", "127.0.0.1");
 	}
 
 	//Start background thread
@@ -4484,7 +4568,7 @@ uint64_t CSQLHelper::UpdateValueInt(const int HardwareID, const char* ID, const 
 					// In DeviceStatus table, index 0 = Usage 1,  1 = Usage 2, 2 = Delivery 1,  3 = Delivery 2, 4 = Usage current, 5 = Delivery current
 					// In MultiMeter table, index 0 = Usage 1, 1 = Delivery 1, 2 = Usage current, 3 = Delivery current, 4 = Usage 2, 5 = Delivery 2
 					// In MultiMeter_Calendar table, same as Multimeter table + counter1, counter2, counter3 and counter4 when shortlog is False
-					UpdateCalendarMeter(HardwareID, ID, unit, devType, subType, 
+					UpdateCalendarMeter(HardwareID, ID, unit, devType, subType,
 						shortLog,
 						true,
 						parts[6].c_str(),
@@ -4504,11 +4588,11 @@ uint64_t CSQLHelper::UpdateValueInt(const int HardwareID, const char* ID, const 
 					if (parts2.size() > 1) {
 						shortLog = true;
 					}
-					UpdateCalendarMeter(HardwareID, ID, unit, devType, subType, 
-						shortLog, 
-						false, 
-						parts[2].c_str(), 
-						std::stoll(parts[0]), 
+					UpdateCalendarMeter(HardwareID, ID, unit, devType, subType,
+						shortLog,
+						false,
+						parts[2].c_str(),
+						std::stoll(parts[0]),
 						std::stoll(parts[1])
 						);
 					return ulID;
@@ -5133,7 +5217,7 @@ void CSQLHelper::ScheduleShortlog()
 		UpdateFanLog();
 		//Removing the line below could cause a very large database,
 		//and slow(large) data transfer (specially when working remote!!)
-		CleanupShortLog();
+		//CleanupShortLog();
 	}
 	catch (boost::exception & e)
 	{
@@ -5165,7 +5249,7 @@ void CSQLHelper::ScheduleDay()
 		AddCalendarUpdateMultiMeter();
 		AddCalendarUpdatePercentage();
 		AddCalendarUpdateFan();
-		CleanupLightSceneLog();
+		//CleanupLightSceneLog();
 	}
 	catch (boost::exception & e)
 	{
@@ -5178,6 +5262,302 @@ void CSQLHelper::ScheduleDay()
 		return;
 	}
 }
+
+
+/* timing to clean light data */
+void CSQLHelper::ScheduleCleanupLightSceneLog()
+{
+	if (!m_dbase)
+		return;
+
+	try
+	{
+		sqlite3_wal_checkpoint(m_dbase, NULL);
+		CleanupLightSceneLog();
+		CheckLightLogCount();
+		CheckSceneLogCount();
+		CheckStrategyLogCount();
+	}
+	catch (boost::exception & e)
+	{
+		_log.Log(LOG_ERROR, "Domoticz: Error running the daily Cleanup schedule script!");
+#ifdef _DEBUG
+		_log.Log(LOG_ERROR, "-----------------\n%s\n----------------", boost::diagnostic_information(e).c_str());
+#else
+		(void)e;
+#endif
+		return;
+	}
+}
+
+
+/* timing to clean sample data  */
+void CSQLHelper::ScheduleCleanShortlog()
+{
+#ifdef _DEBUG
+		//return;
+#endif
+		if (!m_dbase)
+			return;
+
+		try
+		{
+			//Force WAL flush
+			sqlite3_wal_checkpoint(m_dbase, NULL);
+			//Removing the line below could cause a very large database,
+			//and slow(large) data transfer (specially when working remote!!)
+			CleanupShortLog();
+			CheckSampleLogCount();
+		}
+		catch (boost::exception & e)
+		{
+			_log.Log(LOG_ERROR, "Domoticz: Error running the shortlog  clean schedule script!");
+#ifdef _DEBUG
+			_log.Log(LOG_ERROR, "-----------------\n%s\n----------------", boost::diagnostic_information(e).c_str());
+#else
+			(void)e;
+#endif
+			return;
+		}
+}
+
+/* timing to Calendar log data  */
+void CSQLHelper::ScheduleCleanCalendarLog()
+{
+	if (!m_dbase)
+		return;
+
+	try
+	{
+		//Force WAL flush
+		sqlite3_wal_checkpoint(m_dbase, NULL);
+		CleanupCalendarLog();
+		CheckCalendarLogCount();
+	}
+	catch (boost::exception & e)
+	{
+		_log.Log(LOG_ERROR, "Domoticz: Error running the daily Cleanup schedule script!");
+#ifdef _DEBUG
+		_log.Log(LOG_ERROR, "-----------------\n%s\n----------------", boost::diagnostic_information(e).c_str());
+#else
+		(void)e;
+#endif
+		return;
+	}
+
+
+}
+
+
+void CSQLHelper::CheckSceneLogCount()
+{
+	/* SceneLog */
+	auto record = safe_query("SELECT count() FROM SceneLog");
+	if (record.empty() )
+	{
+		return;
+	}
+
+	int nTableMax = 2000;
+	int nMaxCount = 100;
+	int num = atoi(record[0][0].c_str());
+	std::string condition;
+
+	if (num <= 0)
+	{
+		return;
+	}
+	GetPreferencesVar("SceneLogTableMaxSize", nTableMax);
+	GetPreferencesVar("SceneLogMaxPerDev", nMaxCount);
+
+	_log.Log(LOG_STATUS, "SceneLog count:%d  nTableMax:%d  nMaxCount:%d", num, nTableMax, nMaxCount);
+	int remain =  (num > nTableMax) ? nMaxCount/3 : nMaxCount;
+	auto idList =  safe_query("select distinct SceneRowID from SceneLog");
+	if (idList.empty())
+	{
+		_log.Log(LOG_ERROR, "something interesting happened, SceneLog check");
+		return;
+	}
+	for (const auto & itt : idList)
+	{
+		condition = "SceneRowID == " + itt[0];
+		CleanupLogByCount("SceneLog", condition,  remain);
+	}
+}
+
+void CSQLHelper::CheckStrategyLogCount()
+{
+	/* SceneLog */
+	auto record = safe_query("SELECT count() FROM StrategyLog");
+	if (record.empty() )
+	{
+		return;
+	}
+
+	int nTableMax = 2000;
+	int nMaxCount = 100;
+	int num = atoi(record[0][0].c_str());
+	std::string condition;
+
+	if (num <= 0)
+	{
+		return;
+	}
+	GetPreferencesVar("StrategyLogTableMaxSize", nTableMax);
+	GetPreferencesVar("StrategyLogMaxPerDev", nMaxCount);
+
+	_log.Log(LOG_STATUS, "StrategyLog count:%d  nTableMax:%d  nMaxCount:%d", num, nTableMax, nMaxCount);
+	int remain =  (num > nTableMax) ? nMaxCount/3 : nMaxCount;
+	auto idList =  safe_query("select distinct StrategyRowID, StrategyType from StrategyLog");
+	if (idList.empty())
+	{
+		_log.Log(LOG_ERROR, "something interesting happened, StrategyLog check");
+		return;
+	}
+	for (const auto & itt : idList)
+	{
+		condition = "";
+		condition = "StrategyRowID == " + itt[0];
+		condition += " and StrategyType == '" + itt[1] + "'";
+		CleanupLogByCount("StrategyLog", condition,  remain);
+	}
+}
+
+
+void CSQLHelper::CheckLightLogCount()
+{
+	auto record = safe_query("SELECT count() FROM LightingLog");
+	if (record.empty() )
+	{
+		return;
+	}
+	int num = atoi(record[0][0].c_str());
+	int nTableMax = 8000;
+	int nMaxCount = 300;
+	int remain;
+
+	if (num <= 0)
+	{
+		return;
+	}
+	GetPreferencesVar("LightLogTableMaxSize", nTableMax);
+	GetPreferencesVar("LightLogMaxPerDev", nMaxCount);
+
+	remain =  (num > nTableMax) ? nMaxCount/3 : nMaxCount;
+	_log.Log(LOG_STATUS, "LightingLog count:%d  nTableMax:%d  nMaxCount:%d remain:%d", num, nTableMax, nMaxCount, remain);
+
+	auto idList =  safe_query("select distinct DeviceRowID from LightingLog");
+	if (idList.empty())
+	{
+		_log.Log(LOG_ERROR, "something interesting happened, LightingLog check");
+		return;
+	}
+	std::string condition;
+	for (const auto & itt : idList)
+	{
+		condition = "DeviceRowID == " + itt[0];
+		CleanupLogByCount("LightingLog", condition,  remain);
+	}
+}
+
+void CSQLHelper::CheckSampleLogCount()
+{
+	CheckSampleLogCount("Meter");
+	CheckSampleLogCount("MultiMeter");
+	CheckSampleLogCount("Temperature");
+	CheckSampleLogCount("Rain");
+	CheckSampleLogCount("Wind");
+	CheckSampleLogCount("UV");
+	CheckSampleLogCount("Percentage");
+	CheckSampleLogCount("Fan");
+}
+
+void CSQLHelper::CheckSampleLogCount(const std::string& sampleTable)
+{
+	if (sampleTable.empty())
+	{
+		return;
+	}
+	auto record = safe_query("SELECT count() FROM %q", sampleTable.c_str());
+	if (record.empty() )
+	{
+		return;
+	}
+	int num = atoi(record[0][0].c_str());
+	int nTableMax = 3000;
+	int nMinCount = 70;
+	GetPreferencesVar("SampleTableMaxSize", nTableMax);
+	GetPreferencesVar("SampleMinCount", nMinCount);
+
+	_log.Log(LOG_STATUS, "%s count:%d  nTableMax:%d  nMinCount:%d", sampleTable.c_str(), num, nTableMax, nMinCount);
+	if (num > nTableMax)
+	{
+		auto idList =  safe_query("select distinct DeviceRowID from %q", sampleTable.c_str());
+		if (idList.empty())
+		{
+			_log.Log(LOG_ERROR, "something interesting happened, CheckSampleLogCount");
+			return;
+		}
+		std::string condition;
+		for (const auto & itt : idList)
+		{
+			condition = "DeviceRowID == " + itt[0];
+			CleanupLogByCount(sampleTable, condition,  nMinCount);
+		}
+	}
+}
+
+
+void CSQLHelper::CheckCalendarLogCount()
+{
+	CheckCalendarLogCount("Meter_Calendar");
+	CheckCalendarLogCount("MultiMeter_Calendar");
+	CheckCalendarLogCount("Temperature_Calendar");
+	CheckCalendarLogCount("Rain_Calendar");
+	CheckCalendarLogCount("Wind_Calendar");
+	CheckCalendarLogCount("UV_Calendar");
+	CheckCalendarLogCount("Percentage_Calendar");
+	CheckCalendarLogCount("Fan_Calendar");
+}
+
+void CSQLHelper::CheckCalendarLogCount(const std::string& calenderTable)
+{
+	if (calenderTable.empty())
+	{
+		return;
+	}
+	auto record = safe_query("SELECT count() FROM %q", calenderTable.c_str());
+	if (record.empty() )
+	{
+		return;
+	}
+
+	int num = atoi(record[0][0].c_str());
+	int nTableMax = 2000;
+	int nMinPerDev = 120;
+
+	GetPreferencesVar("CalendarTableMaxSize", nTableMax);
+	GetPreferencesVar("CalendarMinCount", nMinPerDev);
+
+	_log.Log(LOG_STATUS, "%s count:%d  nTableMax:%d  nMinPerDev:%d", calenderTable.c_str(), num, nTableMax, nMinPerDev);
+	/* calebder table */
+	if (num > nTableMax)
+	{
+		auto idList =  safe_query("select distinct DeviceRowID from %q", calenderTable.c_str());
+		if (idList.empty())
+		{
+			_log.Log(LOG_ERROR, "something interesting happened, CheckCalendarLogCount");
+			return;
+		}
+		std::string condition;
+		for (const auto & itt : idList)
+		{
+			condition = "DeviceRowID == " + itt[0];
+			CleanupLogByCount(calenderTable, condition,  nMinPerDev);
+		}
+	}
+}
+
 
 void CSQLHelper::UpdateTemperatureLog()
 {
@@ -5564,7 +5944,7 @@ bool CSQLHelper::UpdateCalendarMeter(
 	const long long counter4)
 {
 	std::vector<std::vector<std::string> > result;
-	
+
 	result = safe_query("SELECT ID, Name, SwitchType FROM DeviceStatus WHERE (HardwareID=%d AND DeviceID='%q' AND Unit=%d AND Type=%d AND SubType=%d)", HardwareID, DeviceID, unit, devType, subType);
 	if (result.empty()) {
 		return false;
@@ -6956,50 +7336,43 @@ void CSQLHelper::AddCalendarUpdateFan()
 void CSQLHelper::CleanupShortLog()
 {
 	int n5MinuteHistoryDays = 1;
-	if (GetPreferencesVar("5MinuteHistoryDays", n5MinuteHistoryDays))
+	GetPreferencesVar("5MinuteHistoryDays", n5MinuteHistoryDays);
+
+	if (n5MinuteHistoryDays <= 0)
 	{
-		// If the history days is zero then all data in the short logs is deleted!
-		if (n5MinuteHistoryDays == 0)
-		{
-			_log.Log(LOG_ERROR, "CleanupShortLog(): MinuteHistoryDays is zero!");
-			return;
-		}
-#if 0
-		char szDateStr[40];
-		time_t clear_time = mytime(NULL) - (n5MinuteHistoryDays * 24 * 3600);
-		struct tm ltime;
-		localtime_r(&clear_time, &ltime);
-		sprintf(szDateStr, "%04d-%02d-%02d %02d:%02d:%02d", ltime.tm_year + 1900, ltime.tm_mon + 1, ltime.tm_mday, ltime.tm_hour, ltime.tm_min, ltime.tm_sec);
-		_log.Log(LOG_STATUS, "Cleaning up shortlog older than %s", szDateStr);
-#endif
-
-		char szQuery[250];
-		std::string szQueryFilter = "strftime('%s',datetime('now','localtime')) - strftime('%s',Date) > (SELECT p.nValue * 86400 From Preferences AS p WHERE p.Key='5MinuteHistoryDays')";
-
-		sprintf(szQuery, "DELETE FROM Temperature WHERE %s", szQueryFilter.c_str());
-		query(szQuery);
-
-		sprintf(szQuery, "DELETE FROM Rain WHERE %s", szQueryFilter.c_str());
-		query(szQuery);
-
-		sprintf(szQuery, "DELETE FROM Wind WHERE %s", szQueryFilter.c_str());
-		query(szQuery);
-
-		sprintf(szQuery, "DELETE FROM UV WHERE %s", szQueryFilter.c_str());
-		query(szQuery);
-
-		sprintf(szQuery, "DELETE FROM Meter WHERE %s", szQueryFilter.c_str());
-		query(szQuery);
-
-		sprintf(szQuery, "DELETE FROM MultiMeter WHERE %s", szQueryFilter.c_str());
-		query(szQuery);
-
-		sprintf(szQuery, "DELETE FROM Percentage WHERE %s", szQueryFilter.c_str());
-		query(szQuery);
-
-		sprintf(szQuery, "DELETE FROM Fan WHERE %s", szQueryFilter.c_str());
-		query(szQuery);
+		_log.Log(LOG_ERROR, "CleanupShortLog(): MinuteHistoryDays is zero!");
+		return;
 	}
+	char szQuery[250];
+	std::string szQueryFilter = "strftime('%s',datetime('now','localtime')) - strftime('%s',Date) > ";
+
+	szQueryFilter += std::to_string(n5MinuteHistoryDays * 24 * 60 * 60);
+
+	_log.Log(LOG_STATUS, "delete the old sample Log: date %s", szQueryFilter.c_str());
+
+	sprintf(szQuery, "DELETE FROM Temperature WHERE %s", szQueryFilter.c_str());
+	query(szQuery);
+
+	sprintf(szQuery, "DELETE FROM Rain WHERE %s", szQueryFilter.c_str());
+	query(szQuery);
+
+	sprintf(szQuery, "DELETE FROM Wind WHERE %s", szQueryFilter.c_str());
+	query(szQuery);
+
+	sprintf(szQuery, "DELETE FROM UV WHERE %s", szQueryFilter.c_str());
+	query(szQuery);
+
+	sprintf(szQuery, "DELETE FROM Meter WHERE %s", szQueryFilter.c_str());
+	query(szQuery);
+
+	sprintf(szQuery, "DELETE FROM MultiMeter WHERE %s", szQueryFilter.c_str());
+	query(szQuery);
+
+	sprintf(szQuery, "DELETE FROM Percentage WHERE %s", szQueryFilter.c_str());
+	query(szQuery);
+
+	sprintf(szQuery, "DELETE FROM Fan WHERE %s", szQueryFilter.c_str());
+	query(szQuery);
 }
 
 void CSQLHelper::ClearShortLog()
@@ -7181,6 +7554,7 @@ void CSQLHelper::DeleteScenes(const std::string& idx)
 			safe_exec_no_return("DELETE FROM SceneDevices WHERE (SceneRowID == '%q')", itt.c_str());
 			safe_exec_no_return("DELETE FROM SceneTimers WHERE (SceneRowID == '%q')", itt.c_str());
 			safe_exec_no_return("DELETE FROM SceneLog WHERE (SceneRowID=='%q')", itt.c_str());
+			safe_exec_no_return("DELETE FROM StrategyLog WHERE (StrategyRowID=='%q' and StrategyType=='auto')", itt.c_str());
 			uint64_t ullidx = std::stoull(itt);
 			m_mainworker.m_eventsystem.RemoveSingleState(ullidx, m_mainworker.m_eventsystem.REASON_SCENEGROUP);
 		}
@@ -7341,12 +7715,59 @@ void CSQLHelper::CheckAndUpdateSceneDeviceOrder()
 	}
 }
 
+
+/*
+	listTable: list the check object
+	delTable: want to del the old record
+*/
+void CSQLHelper::CleanupLogByCount(const std::string& delTable, const std::string& condition, int remain)
+{
+	if (delTable.empty())
+	{
+		return;
+	}
+	std::stringstream ss;
+	ss << " (select Date from " << delTable;
+	ss << " where " << condition;
+	ss << " order by Date desc limit 1 offset " << remain << ")";
+
+	std::string daedline = ss.str();
+
+	ss.str("");
+	ss << " delete from " << delTable;
+	ss << " where " << condition;
+	ss << " and Date <= " << daedline;
+
+	std::string sql = ss.str();
+	safe_query(sql.c_str());
+	std::cout<<"sql:"<<sql<<std::endl;
+	_log.Debug(DEBUG_NORM, "CleanupLogByCount:%s", sql.c_str());
+
+	/* debug */
+	_log.Debug(DEBUG_NORM, "CleanupLogByCount: del table:%s condition:%s  remain:%d",
+							delTable.c_str(), condition.c_str(), remain);
+	_log.Debug(DEBUG_NORM, "CleanupLogByCount: %s", sql.c_str());
+
+	sql = daedline.substr(2, daedline.length()-3);
+	if (sql.empty())
+	{
+		return;
+	}
+	auto res = safe_query(sql.c_str());
+	if (!res.empty())
+	{
+		_log.Log(LOG_STATUS, "Find the DeviceRowID Over the max number, delete the old record, "
+							"table:%s condition:%s  remain:%d daedline:%s",
+							delTable.c_str(), condition.c_str(), remain, res[0][0].c_str());
+	}
+}
+
+
 void CSQLHelper::CleanupLightSceneLog()
 {
 	//cleanup the lighting log
-	int nMaxDays = 30;
+	int nMaxDays = 120;
 	GetPreferencesVar("LightHistoryDays", nMaxDays);
-
 	char szDateEnd[40];
 	time_t now = mytime(NULL);
 	struct tm tm1;
@@ -7357,9 +7778,39 @@ void CSQLHelper::CleanupLightSceneLog()
 	constructTime(daybefore, tm2, tm1.tm_year + 1900, tm1.tm_mon + 1, tm1.tm_mday - nMaxDays, tm1.tm_hour, tm1.tm_min, 0, tm1.tm_isdst);
 	sprintf(szDateEnd, "%04d-%02d-%02d %02d:%02d:00", tm2.tm_year + 1900, tm2.tm_mon + 1, tm2.tm_mday, tm2.tm_hour, tm2.tm_min);
 
+	_log.Log(LOG_STATUS, "delete the old LightingLog Scene Strategy  Log: date %s", szDateEnd);
 
 	safe_query("DELETE FROM LightingLog WHERE (Date<'%q')", szDateEnd);
 	safe_query("DELETE FROM SceneLog WHERE (Date<'%q')", szDateEnd);
+	safe_query("DELETE FROM StrategyLog WHERE (Date<'%q')", szDateEnd);
+}
+
+void CSQLHelper::CleanupCalendarLog()
+{
+	//cleanup the lighting log
+	int nMaxYears = 1;
+	GetPreferencesVar("CalendarHistoryYears", nMaxYears);
+
+	char szDateEnd[40];
+	time_t now = mytime(NULL);
+	struct tm tm1;
+	localtime_r(&now, &tm1);
+
+	time_t daybefore;
+	struct tm tm2;
+	constructTime(daybefore, tm2, tm1.tm_year + 1900 -nMaxYears, tm1.tm_mon + 1, tm1.tm_mday, tm1.tm_hour, tm1.tm_min, 0, tm1.tm_isdst);
+	sprintf(szDateEnd, "%04d-%02d-%02d %02d:%02d:00", tm2.tm_year + 1900, tm2.tm_mon + 1, tm2.tm_mday, tm2.tm_hour, tm2.tm_min);
+
+	_log.Log(LOG_STATUS, "delete the old Calendar Log: date %s", szDateEnd);
+
+	safe_query("DELETE FROM Meter_Calendar WHERE (Date<'%q')", szDateEnd);
+	safe_query("DELETE FROM MultiMeter_Calendar WHERE (Date<'%q')", szDateEnd);
+	safe_query("DELETE FROM Temperature_Calendar WHERE (Date<'%q')", szDateEnd);
+	safe_query("DELETE FROM Rain_Calendar WHERE (Date<'%q')", szDateEnd);
+	safe_query("DELETE FROM Wind_Calendar WHERE (Date<'%q')", szDateEnd);
+	safe_query("DELETE FROM UV_Calendar WHERE (Date<'%q')", szDateEnd);
+	safe_query("DELETE FROM Percentage_Calendar WHERE (Date<'%q')", szDateEnd);
+	safe_query("DELETE FROM Fan_Calendar WHERE (Date<'%q')", szDateEnd);
 }
 
 bool CSQLHelper::DoesSceneByNameExits(const std::string &SceneName)
@@ -7467,7 +7918,7 @@ void CSQLHelper::CheckSceneStatus(const uint64_t Idx)
 		safe_query("UPDATE Scenes SET nValue=%d WHERE (ID == %" PRIu64 ")",
 			int(newValue), Idx);
 		if (m_sql.m_bEnableEventSystem)  // Only when eventSystem is active
-			m_mainworker.m_eventsystem.GetCurrentScenesGroups(); 
+			m_mainworker.m_eventsystem.GetCurrentScenesGroups();
 	}
 }
 

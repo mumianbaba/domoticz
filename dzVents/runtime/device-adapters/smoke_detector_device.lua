@@ -18,7 +18,7 @@ return {
 
 			function device.activate()
 				local TimedCommand = require('TimedCommand')
-				return TimedCommand(domoticz, device.name, 'On', 'device', device.state)
+				return TimedCommand(domoticz, device.id, 'On', 'device', device.state)
 			end
 
 			function device.reset()

@@ -870,6 +870,7 @@ void CScheduler::CheckSchedules()
 							bool bHaveDimmer = false;
 							bool bHaveGroupCmd = false;
 							int maxDimLevel = 0;
+							std::vector<std::string> cmdList;
 
 							GetLightStatus(dType, dSubType, switchtype, 0, "", lstatus, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
 							int ilevel = maxDimLevel;
@@ -885,28 +886,52 @@ void CScheduler::CheckSchedules()
 								}
 								else if (itt.timerCmd == TCMD_OFF)
 									ilevel = 0;
+
+								cmdList.emplace_back(switchcmd);
 							}
 							else if ((switchtype == STYPE_Dimmer) && (maxDimLevel != 0))
 							{
 								if (itt.timerCmd == TCMD_ON)
 								{
-									switchcmd = "Set Level";
 									float fLevel = (maxDimLevel / 100.0f)*itt.Level;
 									if (fLevel > 100)
 										fLevel = 100;
 									ilevel = int(fLevel);
+
+									cmdList.emplace_back("On");
+									if (itt.Color.mode ==  ColorModeNone)
+									{
+										cmdList.emplace_back("Set Level");
+									}
+									else
+									{
+										cmdList.emplace_back("Set Color");
+									}
 								}
-							} else if (switchtype == STYPE_Selector) {
+								else{
+									cmdList.emplace_back(switchcmd);
+								}
+							}
+							else if (switchtype == STYPE_Selector) {
 								if (itt.timerCmd == TCMD_ON) {
 									switchcmd = "Set Level";
 									ilevel = itt.Level;
 								} else if (itt.timerCmd == TCMD_OFF) {
 									ilevel = 0; // force level to a valid value for Selector
 								}
+								cmdList.emplace_back(switchcmd);
 							}
-							if (!m_mainworker.SwitchLight(itt.RowID, switchcmd, ilevel, itt.Color, false, 0, "timer"))
+							else
 							{
-								_log.Log(LOG_ERROR, "Error sending switch command, DevID: %" PRIu64 ", Time: %s", itt.RowID, ltimeBuf);
+								cmdList.emplace_back(switchcmd);
+							}
+
+							for (const auto& oneCmd : cmdList)
+							{
+								if (!m_mainworker.SwitchLight(itt.RowID, oneCmd, ilevel, itt.Color, false, 0, "timer"))
+								{
+									_log.Log(LOG_ERROR, "Error sending switch command, DevID: %" PRIu64 ", Time: %s", itt.RowID, ltimeBuf);
+								}
 							}
 						}
 					}
@@ -986,8 +1011,23 @@ namespace http {
 	namespace server {
 		void CWebServer::RType_Schedules(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			std::string rfilter = request::findValue(&req, "filter");
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
 
+			std::string mac = request::findValue(&req, "mac");
+			std::string outlet = request::findValue(&req, "outlet");
+			std::vector<std::vector<std::string> > reqInfo;
+			if (!client.empty() && client != "web" && !mac.empty() && !outlet.empty()) {
+				reqInfo = ConverParamsPlus(req, false);
+				if (reqInfo.empty())
+				{
+					return;
+				}
+			}
+
+			std::string rfilter = request::findValue(&req, "filter");
 			root["status"] = "OK";
 			root["title"] = "Schedules";
 
@@ -1002,7 +1042,7 @@ namespace http {
 				tmp_result = m_sql.safe_query(
 					"SELECT t.ID, t.Active, d.[Name], t.DeviceRowID AS ID, 0 AS IsScene, 0 AS IsThermostat,"
 					" t.[Date], t.Time, t.Type, t.Cmd, t.Level, t.Color, 0 AS Temperature, t.Days,"
-					" t.UseRandomness, t.MDay, t.Month, t.Occurence"
+					" t.UseRandomness, t.MDay, t.Month, t.Occurence, d.Mac, d.Outlet"
 					" FROM Timers AS t, DeviceStatus AS d"
 					" WHERE (d.ID == t.DeviceRowID) AND (t.TimerPlan==%d)"
 					" ORDER BY d.[Name], t.Time",
@@ -1016,7 +1056,7 @@ namespace http {
 				tmp_result = m_sql.safe_query(
 					"SELECT t.ID, t.Active, s.[Name], t.SceneRowID AS ID, 1 AS IsScene, 0 AS IsThermostat"
 					", t.[Date], t.Time, t.Type, t.Cmd, t.Level, '' AS Color, 0 AS Temperature, t.Days,"
-					" t.UseRandomness, t.MDay, t.Month, t.Occurence"
+					" t.UseRandomness, t.MDay, t.Month, t.Occurence, '' AS Mac, 0 AS Outlet"
 					" FROM SceneTimers AS t, Scenes AS s"
 					" WHERE (s.ID == t.SceneRowID) AND (t.TimerPlan==%d)"
 					" ORDER BY s.[Name], t.Time",
@@ -1030,7 +1070,7 @@ namespace http {
 				tmp_result = m_sql.safe_query(
 					"SELECT t.ID, t.Active, d.[Name], t.DeviceRowID AS ID, 0 AS IsScene, 1 AS IsThermostat,"
 					" t.[Date], t.Time, t.Type, 0 AS Cmd, 0 AS Level, '' AS Color, t.Temperature, t.Days,"
-					" 0 AS UseRandomness, t.MDay, t.Month, t.Occurence"
+					" 0 AS UseRandomness, t.MDay, t.Month, t.Occurence, d.Mac, d.Outlet"
 					" FROM SetpointTimers AS t, DeviceStatus AS d"
 					" WHERE (d.ID == t.DeviceRowID) AND (t.TimerPlan==%d)"
 					" ORDER BY d.[Name], t.Time",
@@ -1086,12 +1126,38 @@ namespace http {
 					else
 						sdate = "";
 
+					bool find  = true;
+					if (!reqInfo.empty())
+					{
+						find  = false;
+						for ( const auto& itt : reqInfo)
+						{
+							if (sd[3] == itt[0])
+							{
+								find = true;
+							}
+						}
+					}
+					if (!find)
+					{
+						_log.Debug(DEBUG_WEBSERVER, "The idx is not we want %s", sd[3].c_str());
+						continue;
+					}
 					root["result"][ii]["TimerID"] = iTimerIdx;
 					root["result"][ii]["Active"] = bActive ? "true" : "false";
 					root["result"][ii]["Type"] = bIsScene ? "Scene" : "Device";
 					root["result"][ii]["IsThermostat"] = bIsThermostat ? "true" : "false";
 					root["result"][ii]["DevName"] = sd[2];
-					root["result"][ii]["DeviceRowID"] = atoi(sd[3].c_str()); //TODO: Isn't this a 64 bit device index?
+					if (true == bIsScene)
+					{
+						root["result"][ii]["DeviceRowID"] = atoi(sd[3].c_str()); //TODO: Isn't this a 64 bit device index?
+					}
+					else
+					{
+						root["result"][ii]["Mac"] = sd[18];
+						root["result"][ii]["Outlet"] = atoi(sd[19].c_str());
+					}
+
 					root["result"][ii]["Date"] = sdate;
 					root["result"][ii]["Time"] = sd[7];
 					root["result"][ii]["TimerType"] = iTimerType;
@@ -1119,19 +1185,49 @@ namespace http {
 		void CWebServer::RType_Timers(WebEmSession & session, const request& req, Json::Value &root)
 		{
 			uint64_t idx = 0;
-			if (request::findValue(&req, "idx") != "")
-			{
-				idx = std::strtoull(request::findValue(&req, "idx").c_str(), nullptr, 10);
+
+			std::string timerType;
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
 			}
-			if (idx == 0)
-				return;
+			std::vector<std::string> idxList;
+			std::vector<std::vector<std::string> > reqInfo;
+			if (!client.empty() && client != "web") {
+				reqInfo = ConverParamsPlus(req, false);
+				if (reqInfo.empty())
+				{
+					return;
+				}
+				for (const auto& itt : reqInfo)
+				{
+					idxList.emplace_back(itt[0]);
+				}
+				timerType = request::findValue(&req, "timertype");
+				if (!timerType.empty())
+				{
+					timerType = "AND Type == " + timerType;
+				}
+			}
+			else
+			{
+				std::string idx = request::findValue(&req, "idx");
+				if (idx.empty())
+				{
+					return;
+				}
+				idxList.emplace_back(idx);
+			}
+
 			root["status"] = "OK";
 			root["title"] = "Timers";
 			char szTmp[50];
 
+
 			std::vector<std::vector<std::string> > result;
-			result = m_sql.safe_query("SELECT ID, Active, [Date], Time, Type, Cmd, Level, Color, Days, UseRandomness, MDay, Month, Occurence FROM Timers WHERE (DeviceRowID==%" PRIu64 ") AND (TimerPlan==%d) ORDER BY ID",
-				idx, m_sql.m_ActiveTimerPlan);
+			result = m_sql.safe_query("SELECT ID, Active, [Date], Time, Type, Cmd, Level, Color, Days, UseRandomness, MDay, Month, Occurence, DeviceRowID"
+									  " FROM Timers WHERE (DeviceRowID IN (%q)) AND (TimerPlan==%d) %s ORDER BY ID",
+										boost::join(idxList, ",").c_str(), m_sql.m_ActiveTimerPlan, timerType.c_str());
 			if (!result.empty())
 			{
 				int ii = 0;
@@ -1169,6 +1265,15 @@ namespace http {
 					root["result"][ii]["MDay"] = atoi(sd[10].c_str());
 					root["result"][ii]["Month"] = atoi(sd[11].c_str());
 					root["result"][ii]["Occurence"] = atoi(sd[12].c_str());
+
+					for (const auto& info : reqInfo)
+					{
+						if (sd[13] == info[0])
+						{
+							root["result"][ii]["Mac"] = info[1];
+							root["result"][ii]["Outlet"] = atoi(info[2].c_str());
+						}
+					}
 					ii++;
 				}
 			}
@@ -1204,13 +1309,23 @@ namespace http {
 
 		void CWebServer::Cmd_AddTimer(WebEmSession & session, const request& req, Json::Value &root)
 		{
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
 			if (session.rights != 2)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
 			}
 
-			std::string idx = request::findValue(&req, "idx");
+			std::string idx;
+			if (!client.empty() && client != "web") {
+				idx = ConverParams(req, false);
+			} else {
+				idx = request::findValue(&req, "idx");
+			}
 			std::string active = request::findValue(&req, "active");
 			std::string stimertype = request::findValue(&req, "timertype");
 			std::string sdate = request::findValue(&req, "date");
@@ -1420,14 +1535,22 @@ namespace http {
 			}
 
 			std::string idx = request::findValue(&req, "idx");
-			if (idx == "")
+			std::vector<std::string> idxList;
+			if (idx.empty())
+			{
 				return;
+			}
+			boost::split(idxList, idx, boost::is_any_of(";"), boost::token_compress_on);
+
 			root["status"] = "OK";
 			root["title"] = "DeleteTimer";
-			m_sql.safe_query(
-				"DELETE FROM Timers WHERE (ID == '%q')",
-				idx.c_str()
-				);
+			for (const auto& itt : idxList)
+			{
+				m_sql.safe_query(
+					"DELETE FROM Timers WHERE (ID == '%q')",
+					itt.c_str()
+					);
+			}
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
@@ -1473,22 +1596,51 @@ namespace http {
 
 		void CWebServer::Cmd_ClearTimers(WebEmSession & session, const request& req, Json::Value &root)
 		{
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
 			if (session.rights != 2)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
 			}
 
-			std::string idx = request::findValue(&req, "idx");
-			if (idx == "")
-				return;
+			std::vector<std::string> idxList;
+			std::vector<std::vector<std::string> > reqInfo;
+			if (!client.empty() && client != "web") {
+				reqInfo = ConverParamsPlus(req, false);
+				if (reqInfo.empty())
+				{
+					_log.Debug( DEBUG_WEBSERVER, "Reqeust info empty");
+					return;
+				}
+				for (const auto& itt : reqInfo)
+				{
+					idxList.emplace_back(itt[0]);
+				}
+
+			} else {
+				std::string idx = request::findValue(&req, "idx");
+				if (idx == "")
+				{
+					return;
+				}
+				idxList.emplace_back(idx);
+			}
+
 			root["status"] = "OK";
 			root["title"] = "ClearTimer";
-			m_sql.safe_query(
-				"DELETE FROM Timers WHERE ((DeviceRowID == '%q') AND (TimerPlan == %d))",
-				idx.c_str(),
-				m_sql.m_ActiveTimerPlan
-				);
+			for (const auto& itt : idxList)
+			{
+				m_sql.safe_query(
+					"DELETE FROM Timers WHERE ((DeviceRowID == '%q') AND (TimerPlan == %d))",
+					itt.c_str(),
+					m_sql.m_ActiveTimerPlan
+					);
+			}
+
 			m_mainworker.m_scheduler.ReloadSchedules();
 		}
 
@@ -2239,7 +2391,7 @@ namespace http {
 
 			root["status"] = "OK";
 			root["title"] = "DeletePlan";
-			
+
 			m_sql.safe_query("DELETE FROM Timers WHERE (TimerPlan == '%q')", idx.c_str());
 			m_sql.safe_query("DELETE FROM SceneTimers WHERE (TimerPlan == '%q')", idx.c_str());
 			m_sql.safe_query("DELETE FROM SetpointTimers WHERE (TimerPlan == '%q')", idx.c_str());

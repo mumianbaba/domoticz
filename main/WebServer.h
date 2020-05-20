@@ -261,6 +261,10 @@ private:
 	void Cmd_DeleteGooglePubSubLink(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_AddLogMessage(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ClearShortLog(WebEmSession & session, const request& req, Json::Value &root);
+	void Cmd_CleanupDatabase(WebEmSession & session, const request& req, Json::Value &root);
+	void Cmd_SetDatabaseSetting(WebEmSession & session, const request& req, Json::Value &root);
+	void Cmd_GetDatabaseSetting(WebEmSession & session, const request& req, Json::Value &root);
+
 	void Cmd_VacuumDatabase(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_PanasonicSetMode(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_PanasonicGetNodes(WebEmSession & session, const request& req, Json::Value &root);
@@ -339,6 +343,11 @@ private:
 	void RType_CreateEvohomeSensor(WebEmSession & session, const request& req, Json::Value &root);
 	void RType_BindEvohome(WebEmSession & session, const request& req, Json::Value &root);
 	void RType_CreateRFLinkDevice(WebEmSession & session, const request& req, Json::Value &root);
+
+	void RType_AddStrategyLog(WebEmSession & session, const request& req, Json::Value &root);
+	void RType_DeleteStrategyLog(WebEmSession & session, const request& req, Json::Value &root);
+	void RType_UpdateStrategyLog(WebEmSession & session, const request& req, Json::Value &root);
+	void RType_GetStrategyLog(WebEmSession & session, const request& req, Json::Value &root);
 #ifdef WITH_OPENZWAVE
 	//ZWave
 	void Cmd_ZWaveUpdateNode(WebEmSession & session, const request& req, Json::Value &root);
@@ -398,7 +407,9 @@ private:
 	std::vector<std::vector<std::string> > ConverParamsPlus(const request &req, bool isSubDev = false);
 	std::vector<std::string> GetDeviceIdsByMac(std::string mac);
 	std::string PagingToSql(const request& req);
-
+	// std::string CurcorToSql(const request& req);
+	std::string CurcorToSql(std::string selectSql, std::string tableName, const request& req);
+	std::string getSqlBaseCurcor(std::string preSql, std::string tableName, std::string condiction, bool direction, const request& req);
 };
 
 } //server

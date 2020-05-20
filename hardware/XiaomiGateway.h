@@ -59,6 +59,8 @@ public:
 	void deviceListHandler(Json::Value& root);
 	void updateHardwareInfo(const std::string& model, const std::string& mac);
 	std::string getGatewayIp();
+	void setOnlineStatus(std::shared_ptr<Device>& dev, bool status);
+	OnlineStatus getOnlineStatus(std::shared_ptr<Device>& dev);
 public:
 
 
@@ -115,36 +117,24 @@ private:
 class UdpServer
 {
 public:
-	UdpServer(const std::shared_ptr<boost::asio::io_service> &ioService, const std::string &localIp);
+	UdpServer(const std::string &localIp);
 	~UdpServer();
 	bool initServer();
 
 public:
-	static std::shared_ptr<UdpServer> getUdpServer()
+	static UdpServer* getUdpServer()
 	{
 		return m_updServer;
 	}
-	static void setUdpServer(const std::shared_ptr<UdpServer> server)
+	static void setUdpServer(UdpServer* server)
 	{
 		m_updServer = server;
 	}
 	static void resetUdpServer()
 	{
-		m_updServer.reset();
+		m_updServer = nullptr;
 	}
 
-	static std::shared_ptr<boost::asio::io_service> getIoService()
-	{
-		return m_ioService;
-	}
-	static void setIoService(const std::shared_ptr<boost::asio::io_service> &io)
-	{
-		m_ioService = io;
-	}
-	static void resetIoService()
-	{
-		m_ioService.reset();
-	}
 	bool run();
 	void stop();
 
@@ -154,11 +144,10 @@ private:
 	bool recvParamCheck(Json::Value& root);
 	void handleReceive(const boost::system::error_code& error, std::size_t /*bytes_transferred*/);
 
-
-
 private:
-	boost::asio::ip::udp::socket socket_;
-	boost::asio::ip::udp::endpoint remote_endpoint_;
+	boost::asio::io_service m_ioService;
+	boost::asio::ip::udp::socket m_socket;
+	boost::asio::ip::udp::endpoint m_remoteEndpoint;
 	enum { max_length = 8192 };
 	char data_[max_length];
 	std::string m_gwIp;
@@ -166,8 +155,9 @@ private:
 	boost::thread  m_serThread;
 
 public:
-	static std::shared_ptr<UdpServer> m_updServer;
-	static std::shared_ptr<boost::asio::io_service> m_ioService;
+	static std::mutex m_mutex;
+	static volatile bool m_isRun;
+	static UdpServer* m_updServer;
 
 };
 

@@ -364,8 +364,23 @@ public:
 	void CheckSceneStatusWithDevice(const uint64_t DevIdx);
 	void CheckSceneStatusWithDevice(const std::string &DevIdx);
 
+
 	void ScheduleShortlog();
+
 	void ScheduleDay();
+	void ScheduleCleanupLightSceneLog();
+	void ScheduleCleanShortlog();
+	void ScheduleCleanCalendarLog();
+
+
+	void CheckSceneLogCount();
+	void CheckStrategyLogCount();
+	void CheckLightLogCount();
+	void CheckSampleLogCount(const std::string& samplingTable);
+	void CheckSampleLogCount();
+	void CheckCalendarLogCount(const std::string& calenderTable);
+	void CheckCalendarLogCount();
+
 
 	void ClearShortLog();
 	void VacuumDatabase();
@@ -501,7 +516,9 @@ private:
 	void CheckAndUpdateDeviceOrder();
 	void CheckAndUpdateSceneDeviceOrder();
 
+	void CleanupLogByCount(const std::string& delTable, const std::string& condition, int remain);
 	void CleanupLightSceneLog();
+	void CleanupCalendarLog();
 
 	void UpdateTemperatureLog();
 	void UpdateRainLog();

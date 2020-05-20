@@ -72,6 +72,7 @@ local function Domoticz(settings)
 
 	-- add domoticz commands to the commandArray
 	function self.sendCommand(command, value)
+		command = tostring(command)
 		table.insert(self.commandArray, { [command] = value })
 
 		-- return a reference to the newly added item

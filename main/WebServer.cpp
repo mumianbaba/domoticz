@@ -65,6 +65,9 @@
 
 
 #include <sstream>
+#include <cmath>
+#include <cstdlib>
+
 
 
 #define __STDC_FORMAT_MACROS
@@ -580,6 +583,9 @@ namespace http {
 
 			RegisterCommandCode("addlogmessage", boost::bind(&CWebServer::Cmd_AddLogMessage, this, _1, _2, _3));
 			RegisterCommandCode("clearshortlog", boost::bind(&CWebServer::Cmd_ClearShortLog, this, _1, _2, _3));
+			RegisterCommandCode("cleanupdatabase", boost::bind(&CWebServer::Cmd_CleanupDatabase, this, _1, _2, _3));
+			RegisterCommandCode("setdatabasesetting", boost::bind(&CWebServer::Cmd_SetDatabaseSetting, this, _1, _2, _3));
+			RegisterCommandCode("getdatabasesetting", boost::bind(&CWebServer::Cmd_GetDatabaseSetting, this, _1, _2, _3));
 			RegisterCommandCode("vacuumdatabase", boost::bind(&CWebServer::Cmd_VacuumDatabase, this, _1, _2, _3));
 
 			RegisterCommandCode("addmobiledevice", boost::bind(&CWebServer::Cmd_AddMobileDevice, this, _1, _2, _3));
@@ -596,6 +602,11 @@ namespace http {
 			RegisterRType("scenelog", boost::bind(&CWebServer::RType_SceneLog, this, _1, _2, _3));
 			RegisterRType("settings", boost::bind(&CWebServer::RType_Settings, this, _1, _2, _3));
 			RegisterRType("events", boost::bind(&CWebServer::RType_Events, this, _1, _2, _3));
+
+			RegisterRType("addstrategylog", boost::bind(&CWebServer::RType_AddStrategyLog, this, _1, _2, _3));
+			RegisterRType("deletestrategylog", boost::bind(&CWebServer::RType_DeleteStrategyLog, this, _1, _2, _3));
+			RegisterRType("updatestrategylog", boost::bind(&CWebServer::RType_UpdateStrategyLog, this, _1, _2, _3));
+			RegisterRType("getstrategylog", boost::bind(&CWebServer::RType_GetStrategyLog, this, _1, _2, _3));
 
 			RegisterRType("hardware", boost::bind(&CWebServer::RType_Hardware, this, _1, _2, _3));
 			RegisterRType("devices", boost::bind(&CWebServer::RType_Devices, this, _1, _2, _3));
@@ -3941,12 +3952,11 @@ namespace http {
 							continue;
 						}
 
-						int outlet = retJsonArray[jj]["Outlet"].asInt();
 						if (allDevicesJsonMap.isMember(sMac)) {
-							allDevicesJsonMap[sMac][outlet] = retJsonArray[jj];
+							allDevicesJsonMap[sMac].append(retJsonArray[jj]);
 						} else {
 							Json::Value devicesJsonArray;
-							devicesJsonArray[outlet] = retJsonArray[jj];
+							devicesJsonArray.append(retJsonArray[jj]);
 							allDevicesJsonMap[sMac] = devicesJsonArray;
 						}
 					}
@@ -6795,6 +6805,7 @@ namespace http {
 				root["title"] = "ClearSceneLog";
 
 				result = m_sql.safe_query("DELETE FROM SceneLog WHERE (SceneRowID=='%q')", idx.c_str());
+				result = m_sql.safe_query("DELETE FROM StrategyLog WHERE (StrategyRowID=='%q'and StrategyType=='auto')", idx.c_str());
 			}
 			else if (cparam == "learnsw")
 			{
@@ -8288,9 +8299,15 @@ namespace http {
 			}
 			m_notifications.ConfigFromGetvars(req, true);
 			std::string DashboardType = request::findValue(&req, "DashboardType");
-			m_sql.UpdatePreferencesVar("DashboardType", atoi(DashboardType.c_str()));
+			if (!DashboardType.empty())
+			{
+				m_sql.UpdatePreferencesVar("DashboardType", atoi(DashboardType.c_str()));
+			}
 			std::string MobileType = request::findValue(&req, "MobileType");
-			m_sql.UpdatePreferencesVar("MobileType", atoi(MobileType.c_str()));
+			if (!MobileType.empty())
+			{
+				m_sql.UpdatePreferencesVar("MobileType", atoi(MobileType.c_str()));
+			}
 
 			int nUnit = atoi(request::findValue(&req, "WindUnit").c_str());
 			m_sql.UpdatePreferencesVar("WindUnit", nUnit);
@@ -8308,30 +8325,53 @@ namespace http {
 			m_sql.SetUnitsAndScale();
 
 			std::string AuthenticationMethod = request::findValue(&req, "AuthenticationMethod");
-			_eAuthenticationMethod amethod = (_eAuthenticationMethod)atoi(AuthenticationMethod.c_str());
-			m_sql.UpdatePreferencesVar("AuthenticationMethod", static_cast<int>(amethod));
-			m_pWebEm->SetAuthenticationMethod(amethod);
+			if (!AuthenticationMethod.empty())
+			{
+				_eAuthenticationMethod amethod = (_eAuthenticationMethod)atoi(AuthenticationMethod.c_str());
+				m_sql.UpdatePreferencesVar("AuthenticationMethod", static_cast<int>(amethod));
+				m_pWebEm->SetAuthenticationMethod(amethod);
+			}
 
 			std::string ReleaseChannel = request::findValue(&req, "ReleaseChannel");
-			m_sql.UpdatePreferencesVar("ReleaseChannel", atoi(ReleaseChannel.c_str()));
+			if (!ReleaseChannel.empty())
+			{
+				m_sql.UpdatePreferencesVar("ReleaseChannel", atoi(ReleaseChannel.c_str()));
+			}
 
 			std::string LightHistoryDays = request::findValue(&req, "LightHistoryDays");
-			m_sql.UpdatePreferencesVar("LightHistoryDays", atoi(LightHistoryDays.c_str()));
+			if (!LightHistoryDays.empty())
+			{
+				m_sql.UpdatePreferencesVar("LightHistoryDays", atoi(LightHistoryDays.c_str()));
+			}
 
 			std::string s5MinuteHistoryDays = request::findValue(&req, "ShortLogDays");
-			m_sql.UpdatePreferencesVar("5MinuteHistoryDays", atoi(s5MinuteHistoryDays.c_str()));
+			if (!s5MinuteHistoryDays.empty())
+			{
+				m_sql.UpdatePreferencesVar("s5MinuteHistoryDays", atoi(s5MinuteHistoryDays.c_str()));
+			}
 
-			int iShortLogInterval = atoi(request::findValue(&req, "ShortLogInterval").c_str());
-			if (iShortLogInterval < 1)
-				iShortLogInterval = 5;
-			m_sql.UpdatePreferencesVar("ShortLogInterval", iShortLogInterval);
-			m_sql.m_ShortLogInterval = iShortLogInterval;
+			std::string sShortLogInterval = request::findValue(&req, "ShortLogInterval");
+			if (!sShortLogInterval.empty())
+			{
+				int iShortLogInterval = atoi(sShortLogInterval.c_str());
+				if (iShortLogInterval < 1)
+					iShortLogInterval = 5;
+				m_sql.UpdatePreferencesVar("ShortLogInterval", iShortLogInterval);
+				m_sql.m_ShortLogInterval = iShortLogInterval;
+			}
 
 			std::string sElectricVoltage = request::findValue(&req, "ElectricVoltage");
-			m_sql.UpdatePreferencesVar("ElectricVoltage", atoi(sElectricVoltage.c_str()));
+			if (!sElectricVoltage.empty())
+			{
+				m_sql.UpdatePreferencesVar("ElectricVoltage", atoi(sElectricVoltage.c_str()));
+			}
 
 			std::string sCM113DisplayType = request::findValue(&req, "CM113DisplayType");
-			m_sql.UpdatePreferencesVar("CM113DisplayType", atoi(sCM113DisplayType.c_str()));
+			if (!sCM113DisplayType.empty())
+			{
+				m_sql.UpdatePreferencesVar("CM113DisplayType", atoi(sCM113DisplayType.c_str()));
+			}
+
 
 			std::string WebUserName = base64_encode(CURLEncode::URLDecode(request::findValue(&req, "WebUserName")));
 			std::string WebPassword = CURLEncode::URLDecode(request::findValue(&req, "WebPassword"));
@@ -8398,20 +8438,28 @@ namespace http {
 			}
 
 			std::string SecPassword = request::findValue(&req, "SecPassword");
-			SecPassword = CURLEncode::URLDecode(SecPassword);
-			if (SecPassword.size() != 32)
+			if (!SecPassword.empty())
 			{
-				SecPassword = GenerateMD5Hash(SecPassword);
+				SecPassword = CURLEncode::URLDecode(SecPassword);
+				if (SecPassword.size() != 32)
+				{
+					SecPassword = GenerateMD5Hash(SecPassword);
+				}
+				m_sql.UpdatePreferencesVar("SecPassword", SecPassword.c_str());
 			}
-			m_sql.UpdatePreferencesVar("SecPassword", SecPassword.c_str());
+
 
 			std::string ProtectionPassword = request::findValue(&req, "ProtectionPassword");
-			ProtectionPassword = CURLEncode::URLDecode(ProtectionPassword);
-			if (ProtectionPassword.size() != 32)
+			if (!ProtectionPassword.empty())
 			{
-				ProtectionPassword = GenerateMD5Hash(ProtectionPassword);
+				ProtectionPassword = CURLEncode::URLDecode(ProtectionPassword);
+				if (ProtectionPassword.size() != 32)
+				{
+					ProtectionPassword = GenerateMD5Hash(ProtectionPassword);
+				}
+				m_sql.UpdatePreferencesVar("ProtectionPassword", ProtectionPassword.c_str());
 			}
-			m_sql.UpdatePreferencesVar("ProtectionPassword", ProtectionPassword.c_str());
+
 
 			int EnergyDivider = atoi(request::findValue(&req, "EnergyDivider").c_str());
 			int GasDivider = atoi(request::findValue(&req, "GasDivider").c_str());
@@ -8427,10 +8475,16 @@ namespace http {
 			m_sql.UpdatePreferencesVar("MeterDividerWater", WaterDivider);
 
 			std::string scheckforupdates = request::findValue(&req, "checkforupdates");
-			m_sql.UpdatePreferencesVar("UseAutoUpdate", (scheckforupdates == "on" ? 1 : 0));
+			if (!scheckforupdates.empty())
+			{
+				m_sql.UpdatePreferencesVar("UseAutoUpdate", (scheckforupdates == "on" ? 1 : 0));
+			}
 
 			std::string senableautobackup = request::findValue(&req, "enableautobackup");
-			m_sql.UpdatePreferencesVar("UseAutoBackup", (senableautobackup == "on" ? 1 : 0));
+			if (!senableautobackup.empty())
+			{
+				m_sql.UpdatePreferencesVar("UseAutoBackup", (senableautobackup == "on" ? 1 : 0));
+			}
 
 			float CostEnergy = static_cast<float>(atof(request::findValue(&req, "CostEnergy").c_str()));
 			float CostEnergyT2 = static_cast<float>(atof(request::findValue(&req, "CostEnergyT2").c_str()));
@@ -12931,6 +12985,199 @@ namespace http {
 			_log.Log(LOG_STATUS, "Short Log Cleared!");
 		}
 
+		void CWebServer::Cmd_SetDatabaseSetting(WebEmSession & session, const request& req, Json::Value &root)
+		{
+			_log.Log(LOG_STATUS, "set the database setting start ...");
+
+			/* runtime table setting */
+			std::string value = request::findValue(&req, "LightHistoryDays");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("LightHistoryDays", atoi(value.c_str()));
+			}
+
+			value = request::findValue(&req, "LightLogTableMaxSize");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("LightLogTableMaxSize", atoi(value.c_str()));
+			}
+			value = request::findValue(&req, "LightLogMaxPerDev");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("LightLogMaxPerDev", atoi(value.c_str()));
+			}
+
+			value = request::findValue(&req, "SceneLogTableMaxSize");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("SceneLogTableMaxSize", atoi(value.c_str()));
+			}
+			value = request::findValue(&req, "SceneLogMaxPerDev");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("SceneLogMaxPerDev", atoi(value.c_str()));
+			}
+
+			value = request::findValue(&req, "StrategyLogTableMaxSize");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("StrategyLogTableMaxSize", atoi(value.c_str()));
+			}
+			value = request::findValue(&req, "StrategyLogMaxPerDev");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("StrategyLogMaxPerDev", atoi(value.c_str()));
+			}
+
+
+			/* sample table setting */
+			value = request::findValue(&req, "5MinuteHistoryDays");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("s5MinuteHistoryDays", atoi(value.c_str()));
+			}
+			value = request::findValue(&req, "ShortLogInterval");
+			if (!value.empty())
+			{
+				int iShortLogInterval = atoi(value.c_str());
+				if (iShortLogInterval < 1)
+					iShortLogInterval = 5;
+				m_sql.UpdatePreferencesVar("ShortLogInterval", iShortLogInterval);
+				m_sql.m_ShortLogInterval = iShortLogInterval;
+			}
+			value = request::findValue(&req, "SampleTableMaxSize");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("SampleTableMaxSize", atoi(value.c_str()));
+			}
+
+			value = request::findValue(&req, "SampleMinCount");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("SampleMinCount", atoi(value.c_str()));
+			}
+
+
+			/* graph table setting */
+			value = request::findValue(&req, "CalendarHistoryYears");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("CalendarHistoryYears", atoi(value.c_str()));
+			}
+
+			value = request::findValue(&req, "CalendarTableMaxSize");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("CalendarTableMaxSize", atoi(value.c_str()));
+			}
+
+			value = request::findValue(&req, "CalendarMinCount");
+			if (!value.empty())
+			{
+				m_sql.UpdatePreferencesVar("CalendarMinCount", atoi(value.c_str()));
+			}
+
+			root["status"] = "OK";
+			root["title"] ="SetDatabaseSetting";
+			_log.Log(LOG_STATUS, "set the database setting end ...");
+		}
+
+		void CWebServer::Cmd_GetDatabaseSetting(WebEmSession & session, const request& req, Json::Value &root)
+		{
+			_log.Log(LOG_STATUS, "get the database setting start ...");
+
+			/* runtime table setting */
+			int value;
+			bool res;
+			res = m_sql.GetPreferencesVar("LightHistoryDays", value);
+			if (true == res){
+				root["result"]["LightHistoryDays"] = value;
+			}
+
+			res = m_sql.GetPreferencesVar("LightLogTableMaxSize", value);
+			if (true == res){
+				root["result"]["LightLogTableMaxSize"] = value;
+			}
+
+			res = m_sql.GetPreferencesVar("LightLogMaxPerDev", value);
+			if (true == res){
+				root["result"]["LightLogMaxPerDev"] = value;
+			}
+
+			res = m_sql.GetPreferencesVar("SceneLogTableMaxSize", value);
+			if (true == res){
+				root["result"]["SceneLogTableMaxSize"] = value;
+			}
+
+			res = m_sql.GetPreferencesVar("SceneLogMaxPerDev", value);
+			if (true == res){
+				root["result"]["SceneLogMaxPerDev"] = value;
+			}
+
+			res = m_sql.GetPreferencesVar("StrategyLogTableMaxSize", value);
+			if (true == res){
+				root["result"]["StrategyLogTableMaxSize"] = value;
+			}
+
+			res = m_sql.GetPreferencesVar("StrategyLogMaxPerDev", value);
+			if (true == res){
+				root["result"]["StrategyLogMaxPerDev"] = value;
+			}
+
+			/* sample table setting */
+			res = m_sql.GetPreferencesVar("5MinuteHistoryDays", value);
+			if (true == res){
+				root["result"]["5MinuteHistoryDays"] = value;
+			}
+
+			res = m_sql.GetPreferencesVar("ShortLogInterval", value);
+			if (true == res){
+				root["result"]["ShortLogInterval"] = value;
+			}
+
+			res = m_sql.GetPreferencesVar("SampleTableMaxSize", value);
+			if (true == res){
+				root["result"]["SampleTableMaxSize"] = value;
+			}
+
+			res = m_sql.GetPreferencesVar("SampleMinCount", value);
+			if (true == res){
+				root["result"]["SampleMinCount"] = value;
+			}
+
+			/* graph table setting */
+
+			res = m_sql.GetPreferencesVar("CalendarHistoryYears", value);
+			if (true == res){
+				root["result"]["CalendarHistoryYears"] = value;
+			}
+			res = m_sql.GetPreferencesVar("CalendarTableMaxSize", value);
+			if (true == res){
+				root["result"]["CalendarTableMaxSize"] = value;
+			}
+			res = m_sql.GetPreferencesVar("CalendarMinCount", value);
+			if (true == res){
+				root["result"]["CalendarMinCount"] = value;
+			}
+
+			root["status"] = "OK";
+			root["title"] ="GetDatabaseSetting";
+			_log.Log(LOG_STATUS, "get the database setting end ...");
+		}
+
+		void CWebServer::Cmd_CleanupDatabase(WebEmSession & session, const request& req, Json::Value &root)
+		{
+			_log.Log(LOG_STATUS, "check the datebase size and date start ...");
+			m_sql.ScheduleCleanupLightSceneLog();
+			m_sql.ScheduleCleanShortlog();
+			m_sql.ScheduleCleanCalendarLog();
+			_log.Log(LOG_STATUS, "check the datebase size and date end ...");
+
+			root["status"] = "OK";
+			root["title"] ="CleanupDatabase";
+		}
+
+
 		void CWebServer::Cmd_VacuumDatabase(WebEmSession & session, const request& req, Json::Value &root)
 		{
 			if (session.rights != 2)
@@ -13976,10 +14223,12 @@ namespace http {
 			}
 
 			std::string sIdx;
+			std::string preSql = "SELECT ROWID, nValue, sValue, User, Date";
+			std::string condiction = "";
 			std::string sSql = " ";
 			if (!client.empty() && client != "web") {
 				// get page and count param
-				sSql = PagingToSql(req);
+				// sSql = PagingToSql(req);
 				sIdx = ConverParams(req, false);
 			} else {
 				sIdx = request::findValue(&req, "idx");
@@ -14035,7 +14284,10 @@ namespace http {
 			root["status"] = "OK";
 			root["title"] = "LightLog";
 
-			result = m_sql.safe_query("SELECT ROWID, nValue, sValue, User, Date FROM LightingLog WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date DESC %q", idx, sSql.c_str());
+			condiction = "WHERE DeviceRowID==" + sIdx;
+			sSql = getSqlBaseCurcor(preSql, "LightingLog", condiction, true, req);
+			result = m_sql.safe_query(sSql.c_str());
+			// result = m_sql.safe_query("SELECT ROWID, nValue, sValue, User, Date FROM LightingLog WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date DESC %q", idx, sSql.c_str());
 			if (!result.empty())
 			{
 				std::map<std::string, std::string> selectorStatuses;
@@ -14154,36 +14406,41 @@ namespace http {
 			std::vector<std::string> idxVector;
 			std::map<std::string, int> outletMap;
 			std::string sIdx;
+			std::string preSql = "SELECT ROWID, nValue, sValue, User, Date, DeviceRowID";
+			std::string condiction = "";
 			std::string sSql = " ";
 			if (!client.empty() && client != "web") {
-				// get page and count param
-				sSql = PagingToSql(req);
 				reqInfo = ConverParamsPlus(req, false);
 				if (reqInfo.empty()){
 					return;
 				}
+				for (const auto& itt : reqInfo){
+					idxVector.emplace_back(itt[0]);
+					outletMap[itt[0]] = atoi(itt[2].c_str());
+				}
+
 			} else {
 				sIdx = request::findValue(&req, "idx");
 				if (sIdx.empty()){
 					return;
 				}
 				idxVector.emplace_back(sIdx);
-				outletMap[sIdx] = 0;
-			}
-
-			for (const auto& itt : reqInfo){
-				idxVector.emplace_back(itt[0]);
-				outletMap[itt[0]] = atoi(itt[2].c_str());
+				outletMap[sIdx] = 0; /* error sometimes*/
 			}
 
 			std::vector<std::vector<std::string> > result;
-			result = m_sql.safe_query("SELECT ROWID, nValue, sValue, User, Date, DeviceRowID FROM LightingLog WHERE DeviceRowID IN (%q) ORDER BY Date DESC %q",
-					boost::join(idxVector, ",").c_str(), sSql.c_str());
+			condiction = "WHERE DeviceRowID IN (" + boost::join(idxVector, ",") + ")";
+			sSql = getSqlBaseCurcor(preSql, "LightingLog", condiction, true, req);
+			result = m_sql.safe_query(sSql.c_str());
+
+			// result = m_sql.safe_query("SELECT ROWID, nValue, sValue, User, Date, DeviceRowID FROM LightingLog WHERE DeviceRowID IN (%q) ORDER BY Date DESC %q",
+			// 		boost::join(idxVector, ",").c_str(), sSql.c_str());
 
 			std::cout<<"idx_join:"<<boost::join(idxVector, ",")<<std::endl;
 			root["status"] = "OK";
 			root["title"] = "TextLog";
 
+			_log.Debug(DEBUG_WEBSERVER, "sqlite:%s", sSql.c_str());
 			if (result.empty()){
 				_log.Debug(DEBUG_WEBSERVER, "Get no log");
 				return;
@@ -14203,8 +14460,8 @@ namespace http {
 				ii++;
 			}
 
-			if (reqInfo.size() > 1){
-				/* mutil outlet log get over at here */
+			if (reqInfo.empty() || reqInfo.size() > 1){
+				/* mutil outlet or idx log get over at here */
 				return;
 			}
 
@@ -14261,17 +14518,24 @@ namespace http {
 
 		void CWebServer::RType_SceneLog(WebEmSession & session, const request& req, Json::Value &root)
 		{
+			std::string sIdx = request::findValue(&req, "idx");
 			uint64_t idx = 0;
-			if (request::findValue(&req, "idx") != "")
+			if (sIdx != "")
 			{
-				idx = std::strtoull(request::findValue(&req, "idx").c_str(), nullptr, 10);
+				idx = std::strtoull(sIdx.c_str(), nullptr, 10);
 			}
 			std::vector<std::vector<std::string> > result;
+			std::string preSql = "SELECT ROWID, nValue, User, Date";
+			std::string condiction = "";
+			std::string sSql = " ";
 
 			root["status"] = "OK";
 			root["title"] = "SceneLog";
 
-			result = m_sql.safe_query("SELECT ROWID, nValue, User, Date FROM SceneLog WHERE (SceneRowID==%" PRIu64 ") ORDER BY Date DESC", idx);
+			condiction = "WHERE SceneRowID==" + sIdx;
+			sSql = getSqlBaseCurcor(preSql, "SceneLog", condiction, true, req);
+			result = m_sql.safe_query(sSql.c_str());
+			// result = m_sql.safe_query("SELECT ROWID, nValue, User, Date FROM SceneLog WHERE (SceneRowID==%" PRIu64 ") ORDER BY Date DESC", idx);
 			if (!result.empty())
 			{
 				int ii = 0;
@@ -14434,11 +14698,19 @@ namespace http {
 
 			if (srange == "day")
 			{
+				std::string preSql = "";
+				std::string condiction = "";
+				std::string sSql = "";
+
 				if (sensor == "temp") {
 					root["status"] = "OK";
 					root["title"] = "Graph " + sensor + " " + srange;
 
-					result = m_sql.safe_query("SELECT Temperature, Chill, Humidity, Barometer, Date, SetPoint FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+					preSql = "SELECT Temperature, Chill, Humidity, Barometer, Date, SetPoint, RowID";
+					condiction = " WHERE DeviceRowID==" + sIdx;
+					sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+					result = m_sql.safe_query(sSql.c_str());
+					// result = m_sql.safe_query("SELECT Temperature, Chill, Humidity, Barometer, Date, SetPoint FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 					if (!result.empty())
 					{
 						int ii = 0;
@@ -14446,6 +14718,7 @@ namespace http {
 						{
 							std::vector<std::string> sd = itt;
 
+							root["result"][ii]["idx"] = sd[6];
 							root["result"][ii]["d"] = sd[4].substr(0, 16);
 							if (
 								(dType == pTypeRego6XXTemp) ||
@@ -14521,7 +14794,11 @@ namespace http {
 					root["status"] = "OK";
 					root["title"] = "Graph " + sensor + " " + srange;
 
-					result = m_sql.safe_query("SELECT Percentage, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+					preSql = "SELECT Percentage, Date, RowID";
+					condiction = " WHERE DeviceRowID==" + sIdx;
+					sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+					result = m_sql.safe_query(sSql.c_str());
+					// result = m_sql.safe_query("SELECT Percentage, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 					if (!result.empty())
 					{
 						int ii = 0;
@@ -14529,6 +14806,7 @@ namespace http {
 						{
 							std::vector<std::string> sd = itt;
 
+							root["result"][ii]["idx"] = sd[2];
 							root["result"][ii]["d"] = sd[1].substr(0, 16);
 							root["result"][ii]["v"] = sd[0];
 							ii++;
@@ -14539,7 +14817,11 @@ namespace http {
 					root["status"] = "OK";
 					root["title"] = "Graph " + sensor + " " + srange;
 
-					result = m_sql.safe_query("SELECT Speed, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+					preSql = "SELECT Speed, Date, RowID";
+					condiction = " WHERE DeviceRowID==" + sIdx;
+					sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+					result = m_sql.safe_query(sSql.c_str());
+					// result = m_sql.safe_query("SELECT Speed, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 					if (!result.empty())
 					{
 						int ii = 0;
@@ -14547,6 +14829,7 @@ namespace http {
 						{
 							std::vector<std::string> sd = itt;
 
+							root["result"][ii]["idx"] = sd[2];
 							root["result"][ii]["d"] = sd[1].substr(0, 16);
 							root["result"][ii]["v"] = sd[0];
 							ii++;
@@ -14561,7 +14844,11 @@ namespace http {
 						root["status"] = "OK";
 						root["title"] = "Graph " + sensor + " " + srange;
 
-						result = m_sql.safe_query("SELECT Value1, Value2, Value3, Value4, Value5, Value6, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+						preSql = "SELECT Value1, Value2, Value3, Value4, Value5, Value6, Date, RowID";
+						condiction = " WHERE DeviceRowID==" + sIdx;
+						sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+						result = m_sql.safe_query(sSql.c_str());
+						// result = m_sql.safe_query("SELECT Value1, Value2, Value3, Value4, Value5, Value6, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 						if (!result.empty())
 						{
 							int ii = 0;
@@ -14631,6 +14918,7 @@ namespace http {
 										curDeliv1 *= int(tlaps);
 										curDeliv2 *= int(tlaps);
 
+										root["result"][ii]["idx"] = sd[7];
 										root["result"][ii]["d"] = sd[6].substr(0, 16);
 
 										if ((curDeliv1 != 0) || (curDeliv2 != 0))
@@ -14697,6 +14985,7 @@ namespace http {
 								else
 								{
 									//this meter has no decimals, so return the use peaks
+									root["result"][ii]["idx"] = sd[7];
 									root["result"][ii]["d"] = sd[6].substr(0, 16);
 
 									if (sd[3] != "0")
@@ -14718,7 +15007,11 @@ namespace http {
 						root["status"] = "OK";
 						root["title"] = "Graph " + sensor + " " + srange;
 
-						result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+						preSql = "SELECT Value, Date, ROWID";
+						condiction = " WHERE DeviceRowID==" + sIdx;
+						sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+						result = m_sql.safe_query(sSql.c_str());
+						// result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 						if (!result.empty())
 						{
 							int ii = 0;
@@ -14726,6 +15019,7 @@ namespace http {
 							{
 								std::vector<std::string> sd = itt;
 
+								root["result"][ii]["idx"] = sd[2];
 								root["result"][ii]["d"] = sd[1].substr(0, 16);
 								root["result"][ii]["co2"] = sd[0];
 								ii++;
@@ -14737,7 +15031,11 @@ namespace http {
 						root["status"] = "OK";
 						root["title"] = "Graph " + sensor + " " + srange;
 
-						result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+						preSql = "SELECT Value, Date, ROWID";
+						condiction = " WHERE DeviceRowID==" + sIdx;
+						sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+						result = m_sql.safe_query(sSql.c_str());
+						// result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 						if (!result.empty())
 						{
 							int ii = 0;
@@ -14745,6 +15043,7 @@ namespace http {
 							{
 								std::vector<std::string> sd = itt;
 
+								root["result"][ii]["idx"] = sd[2];
 								root["result"][ii]["d"] = sd[1].substr(0, 16);
 								root["result"][ii]["v"] = sd[0];
 								ii++;
@@ -14771,7 +15070,13 @@ namespace http {
 						{
 							vdiv = 1000.0f;
 						}
-						result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+
+						preSql = "SELECT Value, Date, ROWID";
+						condiction = " WHERE DeviceRowID==" + sIdx;
+						sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+						result = m_sql.safe_query(sSql.c_str());
+
+						// result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 						if (!result.empty())
 						{
 							int ii = 0;
@@ -14779,6 +15084,7 @@ namespace http {
 							{
 								std::vector<std::string> sd = itt;
 
+								root["result"][ii]["idx"] = sd[2];
 								root["result"][ii]["d"] = sd[1].substr(0, 16);
 								float fValue = float(atof(sd[0].c_str())) / vdiv;
 								if (metertype == 1)
@@ -14799,7 +15105,11 @@ namespace http {
 						root["status"] = "OK";
 						root["title"] = "Graph " + sensor + " " + srange;
 
-						result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+						preSql = "SELECT Value, Date, ROWID";
+						condiction = " WHERE DeviceRowID==" + sIdx;
+						sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+						result = m_sql.safe_query(sSql.c_str());
+						// result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 						if (!result.empty())
 						{
 							int ii = 0;
@@ -14807,6 +15117,7 @@ namespace http {
 							{
 								std::vector<std::string> sd = itt;
 
+								root["result"][ii]["idx"] = sd[2];
 								root["result"][ii]["d"] = sd[1].substr(0, 16);
 								root["result"][ii]["v"] = sd[0];
 								ii++;
@@ -14818,7 +15129,11 @@ namespace http {
 						root["status"] = "OK";
 						root["title"] = "Graph " + sensor + " " + srange;
 
-						result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+						preSql = "SELECT Value, Date, ROWID";
+						condiction = " WHERE DeviceRowID==" + sIdx;
+						sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+						result = m_sql.safe_query(sSql.c_str());
+						// result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 						if (!result.empty())
 						{
 							int ii = 0;
@@ -14826,6 +15141,7 @@ namespace http {
 							{
 								std::vector<std::string> sd = itt;
 
+								root["result"][ii]["idx"] = sd[2];
 								root["result"][ii]["d"] = sd[1].substr(0, 16);
 								root["result"][ii]["lux"] = sd[0];
 								ii++;
@@ -14837,7 +15153,11 @@ namespace http {
 						root["status"] = "OK";
 						root["title"] = "Graph " + sensor + " " + srange;
 
-						result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+						preSql = "SELECT Value, Date, ROWID";
+						condiction = " WHERE DeviceRowID==" + sIdx;
+						sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+						result = m_sql.safe_query(sSql.c_str());
+						// result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 						if (!result.empty())
 						{
 							int ii = 0;
@@ -14845,6 +15165,7 @@ namespace http {
 							{
 								std::vector<std::string> sd = itt;
 
+								root["result"][ii]["idx"] = sd[2];
 								root["result"][ii]["d"] = sd[1].substr(0, 16);
 								sprintf(szTmp, "%.1f", m_sql.m_weightscale * atof(sd[0].c_str()) / 10.0f);
 								root["result"][ii]["v"] = szTmp;
@@ -14857,7 +15178,11 @@ namespace http {
 						root["status"] = "OK";
 						root["title"] = "Graph " + sensor + " " + srange;
 
-						result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+						preSql = "SELECT Value, Date, ROWID";
+						condiction = " WHERE DeviceRowID==" + sIdx;
+						sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+						result = m_sql.safe_query(sSql.c_str());
+						// result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 						if (!result.empty())
 						{
 							int ii = 0;
@@ -14865,6 +15190,7 @@ namespace http {
 							{
 								std::vector<std::string> sd = itt;
 
+								root["result"][ii]["idx"] = sd[2];
 								root["result"][ii]["d"] = sd[1].substr(0, 16);
 								root["result"][ii]["u"] = atof(sd[0].c_str()) / 10.0f;
 								ii++;
@@ -14884,7 +15210,11 @@ namespace http {
 
 						root["displaytype"] = displaytype;
 
-						result = m_sql.safe_query("SELECT Value1, Value2, Value3, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+						preSql = "SELECT Value1, Value2, Value3, Date, RowID";
+						condiction = " WHERE DeviceRowID==" + sIdx;
+						sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+						result = m_sql.safe_query(sSql.c_str());
+						// result = m_sql.safe_query("SELECT Value1, Value2, Value3, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 						if (!result.empty())
 						{
 							int ii = 0;
@@ -14894,6 +15224,7 @@ namespace http {
 							for (const auto & itt : result)
 							{
 								std::vector<std::string> sd = itt;
+								root["result"][ii]["idx"] = sd[4];
 
 								root["result"][ii]["d"] = sd[3].substr(0, 16);
 
@@ -14958,7 +15289,11 @@ namespace http {
 
 						root["displaytype"] = displaytype;
 
-						result = m_sql.safe_query("SELECT Value1, Value2, Value3, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+						preSql = "SELECT Value1, Value2, Value3, Date, RowID";
+						condiction = " WHERE DeviceRowID==" + sIdx;
+						sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+						result = m_sql.safe_query(sSql.c_str());
+						// result = m_sql.safe_query("SELECT Value1, Value2, Value3, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 						if (!result.empty())
 						{
 							int ii = 0;
@@ -14968,6 +15303,7 @@ namespace http {
 							for (const auto & itt : result)
 							{
 								std::vector<std::string> sd = itt;
+								root["result"][ii]["idx"] = sd[4];
 
 								root["result"][ii]["d"] = sd[3].substr(0, 16);
 
@@ -15040,7 +15376,12 @@ namespace http {
 						}
 
 						int ii = 0;
-						result = m_sql.safe_query("SELECT Value,[Usage], Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+
+						preSql = "SELECT Value,[Usage], Date, RowID";
+						condiction = " WHERE DeviceRowID==" + sIdx;
+						sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+						result = m_sql.safe_query(sSql.c_str());
+						// result = m_sql.safe_query("SELECT Value,[Usage], Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 
 						int method = 0;
 						std::string sMethod = request::findValue(&req, "method");
@@ -15072,7 +15413,7 @@ namespace http {
 							for (itt = result.begin(); itt!=result.end(); ++itt)
 							{
 								std::vector<std::string> sd = *itt;
-
+								
 								//If method == 1, provide BOTH hourly and instant usage for combined graph
 								{
 									//bars / hour
@@ -15088,6 +15429,7 @@ namespace http {
 										{
 											//root["result"][ii]["d"] = LastDateTime + (method == 1 ? ":30" : ":00");
 											//^^ not necessarily bad, but is currently inconsistent with all other day graphs
+											root["result"][ii]["idx"] = sd[3];
 											root["result"][ii]["d"] = LastDateTime + ":00";
 
 											long long ulTotalValue = ulLastValue - ulFirstValue;
@@ -15187,12 +15529,21 @@ namespace http {
 						time_t lastTime = 0;
 
 						if (bIsManagedCounter) {
-							result = m_sql.safe_query("SELECT Usage, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+							preSql = "SELECT Usage, Date, RowID";
+							condiction = " WHERE DeviceRowID==" + sIdx;
+							sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+							result = m_sql.safe_query(sSql.c_str());
+
+							// result = m_sql.safe_query("SELECT Usage, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 							bHaveFirstValue = true;
 							bHaveFirstRealValue = true;
 						}
 						else {
-							result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+							preSql = "SELECT Usage, Date, RowID";
+							condiction = " WHERE DeviceRowID==" + sIdx;
+							sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+							result = m_sql.safe_query(sSql.c_str());
+							// result = m_sql.safe_query("SELECT Value, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 						}
 
 						int method = 0;
@@ -15205,7 +15556,7 @@ namespace http {
 							for (const auto & itt : result)
 							{
 								std::vector<std::string> sd = itt;
-
+								
 								if (method == 0)
 								{
 									//bars / hour
@@ -15230,6 +15581,7 @@ namespace http {
 
 											char szTime[50];
 											sprintf(szTime, "%04d-%02d-%02d %02d:00", ntime.tm_year + 1900, ntime.tm_mon + 1, ntime.tm_mday, ntime.tm_hour);
+											root["result"][ii]["idx"] = sd[2];
 											root["result"][ii]["d"] = szTime;
 
 											//float TotalValue = float(actValue - ulFirstValue);
@@ -15372,7 +15724,11 @@ namespace http {
 					root["status"] = "OK";
 					root["title"] = "Graph " + sensor + " " + srange;
 
-					result = m_sql.safe_query("SELECT Level, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+					preSql = "SELECT Level, Date, RowID";
+					condiction = " WHERE DeviceRowID==" + sIdx;
+					sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+					result = m_sql.safe_query(sSql.c_str());
+					// result = m_sql.safe_query("SELECT Level, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 					if (!result.empty())
 					{
 						int ii = 0;
@@ -15380,6 +15736,7 @@ namespace http {
 						{
 							std::vector<std::string> sd = itt;
 
+							root["result"][ii]["idx"] = sd[2];
 							root["result"][ii]["d"] = sd[1].substr(0, 16);
 							root["result"][ii]["uvi"] = sd[0];
 							ii++;
@@ -15396,13 +15753,18 @@ namespace http {
 					float LastValue = -1;
 					std::string LastDate = "";
 
-					result = m_sql.safe_query("SELECT Total, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+					preSql = "SELECT Total, Date, RowID";
+					condiction = " WHERE DeviceRowID==" + sIdx;
+					sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+					result = m_sql.safe_query(sSql.c_str());
+					// result = m_sql.safe_query("SELECT Total, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 					if (!result.empty())
 					{
 						int ii = 0;
 						for (const auto & itt : result)
 						{
 							std::vector<std::string> sd = itt;
+
 							float ActTotal = static_cast<float>(atof(sd[0].c_str()));
 							int Hour = atoi(sd[1].substr(11, 2).c_str());
 							if (Hour != LastHour)
@@ -15410,6 +15772,7 @@ namespace http {
 								if (LastHour != -1)
 								{
 									int NextCalculatedHour = (LastHour + 1) % 24;
+									root["result"][ii]["idx"] = sd[2];
 									if (Hour != NextCalculatedHour)
 									{
 										//Looks like we have a GAP somewhere, finish the last hour
@@ -15442,7 +15805,11 @@ namespace http {
 					root["status"] = "OK";
 					root["title"] = "Graph " + sensor + " " + srange;
 
-					result = m_sql.safe_query("SELECT Direction, Speed, Gust, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+					preSql = "SELECT Direction, Speed, Gust, Date, RowID";
+					condiction = " WHERE DeviceRowID==" + sIdx;
+					sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+					result = m_sql.safe_query(sSql.c_str());
+					// result = m_sql.safe_query("SELECT Direction, Speed, Gust, Date FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 					if (!result.empty())
 					{
 						int ii = 0;
@@ -15450,6 +15817,7 @@ namespace http {
 						{
 							std::vector<std::string> sd = itt;
 
+							root["result"][ii]["idx"] = sd[4];
 							root["result"][ii]["d"] = sd[3].substr(0, 16);
 							root["result"][ii]["di"] = sd[0];
 
@@ -15479,7 +15847,11 @@ namespace http {
 					root["status"] = "OK";
 					root["title"] = "Graph " + sensor + " " + srange;
 
-					result = m_sql.safe_query("SELECT Direction, Speed, Gust FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
+					preSql = "SELECT Direction, Speed, Gust, RowID";
+					condiction = " WHERE DeviceRowID==" + sIdx;
+					sSql = getSqlBaseCurcor(preSql, dbasetable, condiction, false, req);
+					result = m_sql.safe_query(sSql.c_str());
+					// result = m_sql.safe_query("SELECT Direction, Speed, Gust FROM %s WHERE (DeviceRowID==%" PRIu64 ") ORDER BY Date ASC", dbasetable.c_str(), idx);
 					if (!result.empty())
 					{
 						std::map<int, int> _directions;
@@ -15561,10 +15933,14 @@ namespace http {
 							szLegendLabels[6] = "&gt; 10" + m_sql.m_windsign;
 						}
 
-
+						// ii = 0;
 						for (const auto & itt : result)
 						{
 							std::vector<std::string> sd = itt;
+							
+							// root["result"][ii]["idx"] = sd[3];
+							// ii ++;
+
 							float fdirection = static_cast<float>(atof(sd[0].c_str()));
 							if (fdirection >= 360)
 								fdirection = 0;
@@ -18334,8 +18710,6 @@ namespace http {
 			return result;
 		}
 
-
-
 		std::vector<std::string> CWebServer::GetDeviceIdsByMac(std::string mac) {
 			std::vector<std::string> devids;
 			std::vector<std::vector<std::string> > result;
@@ -18371,6 +18745,60 @@ namespace http {
 			}
 
 			return sSql;
+		}
+#if 0
+		std::string CWebServer::CurcorToSql(const request& req) {
+			std::string sCurcor = request::findValue(&req, "curcor");
+			std::string sCount = request::findValue(&req, "count");
+			std::string sSql = " ";
+			if (!sCurcor.empty() && atoi(sCurcor.c_str()) >= 0 && !sCount.empty() && atoi(sCount.c_str()) >= 0) {
+				int offset = atoi(sCurcor.c_str());
+				sSql = "LIMIT " + sCount + " OFFSET " + std::to_string(offset);
+			}
+
+			return sSql;
+		}
+#endif
+		std::string CWebServer::CurcorToSql(std::string selectSql, std::string tableName, const request& req) {
+			std::string sCurcor = request::findValue(&req, "curcor");
+			std::string sCount = request::findValue(&req, "count");
+			std::string sSql = " ";
+			std::string condiction = "";
+
+			int curcor = atoi(sCurcor.c_str());
+			int count = atoi(sCount.c_str());
+			if (sCurcor.empty() || sCount.empty() || curcor < 0) {
+				return tableName;
+			}
+
+			if (count < 0) {
+				if (curcor != 0) {
+					condiction = "AND ( rowid < " + sCurcor + " )";
+				}
+				sSql = selectSql + " "+ condiction + " ORDER BY rowid DESC " + " LIMIT " + std::to_string(-count);
+			} else {
+				condiction = "AND ( rowid > " + sCurcor + " )";
+				sSql = selectSql + " " + condiction  + " ORDER BY rowid ASC " + " LIMIT " + std::to_string(count);
+			}
+
+			return "(" + sSql + ")";
+		}
+
+		std::string CWebServer::getSqlBaseCurcor(std::string preSql, std::string tableName,
+		std::string condiction, bool direction, const request& req) {
+			std::string selectSql = preSql + " FROM " + tableName + " " + condiction;
+			std::string sSql = CurcorToSql(selectSql, tableName, req);
+			std::string result;
+
+			if (sSql == tableName) {
+				sSql =  tableName + " " + condiction;
+			}
+			if (direction)
+				result = preSql + " FROM " + sSql + " ORDER BY rowid DESC";
+			else
+				result = preSql + " FROM " + sSql + " ORDER BY rowid ASC";
+
+			return result;
 		}
 	} //server
 }//http

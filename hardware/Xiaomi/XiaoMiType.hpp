@@ -27,6 +27,11 @@ typedef boost::tuple<std::string  /* key */, std::string /* value */, int> RuleL
 typedef boost::tuple<std::string  /* key */, std::string /* value */, int> RuleGW;
 
 
+enum class OnlineStatus{
+	Unknown = -1,
+	Online = 0,
+	Offline = 1,
+};
 
 //#define pTypeGeneralSwitch			0xF4
 //#define sSwitchGeneralSwitch		0x49

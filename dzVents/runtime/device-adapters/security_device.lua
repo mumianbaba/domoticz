@@ -25,15 +25,15 @@ return {
 		device.state = domoticz.security -- normalize to domoticz.security states
 
 		function device.disarm()
-			return TimedCommand(domoticz, device.name, 'Disarm', 'device', device.state)
+			return TimedCommand(domoticz, device.id, 'Disarm', 'device', device.state)
 		end
 
 		function device.armAway()
-			return TimedCommand(domoticz, device.name, 'Arm Away', 'device', device.state)
+			return TimedCommand(domoticz, device.id, 'Arm Away', 'device', device.state)
 		end
 
 		function device.armHome()
-			return TimedCommand(domoticz, device.name, 'Arm Home', 'device', device.state)
+			return TimedCommand(domoticz, device.id, 'Arm Home', 'device', device.state)
 		end
 
 	end
