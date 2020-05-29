@@ -151,7 +151,7 @@ void CScheduler::ReloadSchedules()
 
 				if ((titem.timerCmd == TCMD_ON) && (titem.Level == 0))
 				{
-					titem.Level = 100;
+//					titem.Level = 100;
 				}
 				titem.Days = atoi(sd[5].c_str());
 				titem.DeviceName = sd[6];
@@ -250,7 +250,7 @@ void CScheduler::ReloadSchedules()
 			titem.bUseRandomness = (atoi(sd[7].c_str()) != 0);
 			if ((titem.timerCmd == TCMD_ON) && (titem.Level == 0))
 			{
-				titem.Level = 100;
+//				titem.Level = 100;
 			}
 			titem.Days = atoi(sd[5].c_str());
 			titem.DeviceName = sd[6];
@@ -815,10 +815,16 @@ void CScheduler::CheckSchedules()
 				else
 					_log.Log(LOG_STATUS, "Schedule item started! Name: %s, Type: %s, DevID: %" PRIu64 ", Time: %s", itt.DeviceName.c_str(), Timer_Type_Desc(itt.timerType), itt.RowID, ltimeBuf);
 				std::string switchcmd = "";
-				if (itt.timerCmd == TCMD_ON)
-					switchcmd = "On";
-				else if (itt.timerCmd == TCMD_OFF)
+				if (itt.timerCmd == 0)
+				{
 					switchcmd = "Off";
+				}
+				else if (itt.timerCmd > 0)
+				{
+					switchcmd = "On";
+				}
+
+
 				if (switchcmd == "")
 				{
 					_log.Log(LOG_ERROR, "Unknown switch command in timer!!....");
@@ -827,17 +833,6 @@ void CScheduler::CheckSchedules()
 				{
 					if (itt.bIsScene == true)
 					{
-/*
-						if (
-							(itt.timerType == TTYPE_BEFORESUNRISE) ||
-							(itt.timerType == TTYPE_AFTERSUNRISE) ||
-							(itt.timerType == TTYPE_BEFORESUNSET) ||
-							(itt.timerType == TTYPE_AFTERSUNSET)
-							)
-						{
-
-						}
-*/
 						if (!m_mainworker.SwitchScene(itt.RowID, switchcmd, "timer"))
 						{
 							_log.Log(LOG_ERROR, "Error switching Scene command, SceneID: %" PRIu64 ", Time: %s", itt.RowID, ltimeBuf);
@@ -865,18 +860,19 @@ void CScheduler::CheckSchedules()
 							unsigned char dType = atoi(sd[0].c_str());
 							unsigned char dSubType = atoi(sd[1].c_str());
 							_eSwitchType switchtype = (_eSwitchType)atoi(sd[2].c_str());
-							std::string lstatus = "";
+							//std::string lstatus = "";
 							int llevel = 0;
 							bool bHaveDimmer = false;
 							bool bHaveGroupCmd = false;
 							int maxDimLevel = 0;
 							std::vector<std::string> cmdList;
+							std::string sValue = std::to_string(itt.Level);
 
-							GetLightStatus(dType, dSubType, switchtype, 0, "", lstatus, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
+							GetLightStatus(dType, dSubType, switchtype, itt.timerCmd, sValue, switchcmd, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
 							int ilevel = maxDimLevel;
 							if ((switchtype == STYPE_BlindsPercentage) || (switchtype == STYPE_BlindsPercentageInverted))
 							{
-								if (itt.timerCmd == TCMD_ON)
+								if (switchcmd == "On")
 								{
 									switchcmd = "Set Level";
 									float fLevel = (maxDimLevel / 100.0f)*itt.Level;
@@ -884,44 +880,52 @@ void CScheduler::CheckSchedules()
 										fLevel = 100;
 									ilevel = int(fLevel);
 								}
-								else if (itt.timerCmd == TCMD_OFF)
+								else if (switchcmd == "Off")
 									ilevel = 0;
-
-								cmdList.emplace_back(switchcmd);
 							}
-							else if ((switchtype == STYPE_Dimmer) && (maxDimLevel != 0))
+							else if (switchtype == STYPE_Selector) {
+								if (switchcmd == "Set Level") {
+									ilevel = itt.Level;
+								} else if (switchcmd == "Off") {
+									ilevel = 0; // force level to a valid value for Selector
+								}
+							}
+							else if (switchtype == STYPE_Dimmer)
 							{
-								if (itt.timerCmd == TCMD_ON)
-								{
-									float fLevel = (maxDimLevel / 100.0f)*itt.Level;
-									if (fLevel > 100)
-										fLevel = 100;
-									ilevel = int(fLevel);
+								float fLevel = (maxDimLevel / 100.0f) * itt.Level;
+								if (fLevel > 100)
+									fLevel = 100;
+								ilevel = round(fLevel);
 
+								_log.Log(LOG_NORM, "witchscene led lstatus: %s", switchcmd.c_str());
+								if (switchcmd == "On")
+								{
 									cmdList.emplace_back("On");
 									if (itt.Color.mode ==  ColorModeNone)
 									{
-										cmdList.emplace_back("Set Level");
+										if (ilevel > 0)
+										{
+											cmdList.emplace_back("Set Level");
+										}
 									}
 									else
 									{
 										cmdList.emplace_back("Set Color");
 									}
 								}
-								else{
-									cmdList.emplace_back(switchcmd);
+								else if (switchcmd.find("Set Level") != std::string::npos)
+								{
+									if (itt.Color.mode !=  ColorModeNone)
+									{
+										cmdList.emplace_back("Set Color");
+									}
+									else{
+										cmdList.emplace_back("Set Level");
+									}
 								}
 							}
-							else if (switchtype == STYPE_Selector) {
-								if (itt.timerCmd == TCMD_ON) {
-									switchcmd = "Set Level";
-									ilevel = itt.Level;
-								} else if (itt.timerCmd == TCMD_OFF) {
-									ilevel = 0; // force level to a valid value for Selector
-								}
-								cmdList.emplace_back(switchcmd);
-							}
-							else
+
+							if (cmdList.empty())
 							{
 								cmdList.emplace_back(switchcmd);
 							}
@@ -1186,6 +1190,7 @@ namespace http {
 		{
 			uint64_t idx = 0;
 
+			int tType = 0;
 			std::string timerType;
 			std::string client = request::findValue(&req, "client");
 			if (!client.empty()) {
@@ -1206,7 +1211,15 @@ namespace http {
 				timerType = request::findValue(&req, "timertype");
 				if (!timerType.empty())
 				{
-					timerType = "AND Type == " + timerType;
+					try{
+						tType = std::stoi(timerType);
+					}
+
+					catch (const std::exception & e){
+						_log.Log(LOG_ERROR, " timer Type num a number :%s", e.what());
+						return;
+					}
+					timerType = "AND Type == " + std::to_string(tType);
 				}
 			}
 			else
@@ -1237,27 +1250,34 @@ namespace http {
 
 					unsigned char iLevel = atoi(sd[6].c_str());
 					if (iLevel == 0)
-						iLevel = 100;
+					{
+						//iLevel = 100;
+					}
 
 					int iTimerType = atoi(sd[4].c_str());
 					std::string sdate = sd[2];
+					int Year = 0;
+					int Month = 0;
+					int Day = 0;
 					if ((iTimerType == TTYPE_FIXEDDATETIME) && (sdate.size() == 10))
 					{
-						int Year = atoi(sdate.substr(0, 4).c_str());
-						int Month = atoi(sdate.substr(5, 2).c_str());
-						int Day = atoi(sdate.substr(8, 2).c_str());
+						Year = atoi(sdate.substr(0, 4).c_str());
+						Month = atoi(sdate.substr(5, 2).c_str());
+						Day = atoi(sdate.substr(8, 2).c_str());
 						sprintf(szTmp, "%04d-%02d-%02d", Year, Month, Day);
 						sdate = szTmp;
 					}
 					else
 						sdate = "";
 
+					int active = atoi(sd[1].c_str());
+
 					root["result"][ii]["idx"] = sd[0];
-					root["result"][ii]["Active"] = (atoi(sd[1].c_str()) == 0) ? "false" : "true";
+					root["result"][ii]["Active"] = (active == 0) ? "false" : "true";
 					root["result"][ii]["Date"] = sdate;
 					root["result"][ii]["Time"] = sd[3].substr(0, 5);
 					root["result"][ii]["Type"] = iTimerType;
-					root["result"][ii]["Cmd"] = atoi(sd[5].c_str());
+					root["result"][ii]["Cmd"] = "Off";
 					root["result"][ii]["Level"] = iLevel;
 					root["result"][ii]["Color"] = sd[7];
 					root["result"][ii]["Days"] = atoi(sd[8].c_str());
@@ -1265,6 +1285,76 @@ namespace http {
 					root["result"][ii]["MDay"] = atoi(sd[10].c_str());
 					root["result"][ii]["Month"] = atoi(sd[11].c_str());
 					root["result"][ii]["Occurence"] = atoi(sd[12].c_str());
+
+					int command = atoi(sd[5].c_str());
+					std::string sValue = sd[6];
+					std::string strCmd;
+					//Get SwitchType
+					auto device = m_sql.safe_query("SELECT Type,SubType,SwitchType FROM DeviceStatus WHERE (ID == %q)", sd[13].c_str());
+					if (!device.empty())
+					{
+						int devType = atoi(device[0][0].c_str());
+						int devSubType = atoi(device[0][1].c_str());
+						_eSwitchType switchtype = (_eSwitchType)atoi(device[0][2].c_str());
+						int llevel = 0;
+						bool bHaveDimmer = false;
+						bool bHaveGroupCmd = false;
+						int maxDimLevel = 0;
+						GetLightStatus(devType, devSubType, switchtype, command, sValue, strCmd, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
+						root["result"][ii]["Cmd"] = strCmd;
+					}
+
+					/* get the fixeddate time gaps */
+					if (active != 0 && iTimerType == TTYPE_FIXEDDATETIME)
+					{
+						time_t now;
+						time_t point;
+						struct tm tm1;
+						struct tm tm2;
+						int hour = 0;
+						int min = 0;
+						now = mytime (NULL);
+						localtime_r (&now, &tm1);
+						if (!sdate.empty())
+						{
+							tm1.tm_year = Year;
+							tm1.tm_mon = Month;
+							tm1.tm_mday = Day;
+						}
+						if (!sd[3].empty())
+						{
+							sscanf (sd[3].c_str(), "%d:%d", &hour, &min);
+						}
+
+						tm1.tm_hour = hour;
+						tm1.tm_min = min;
+						constructTime(point, tm2,
+										tm1.tm_year, tm1.tm_mon,tm1.tm_mday,
+										tm1.tm_hour, tm1.tm_min, 0, tm1.tm_isdst);
+
+						_log.Log(LOG_STATUS, "timer  %04d-%02d-%02d  %02d:%02d", Year, Month, Day, hour, min);
+						char strTime[16];
+						int gaps = point - now;
+						memset(strTime, 0, sizeof(strTime));
+						if (gaps >= 0)
+						{
+							tm1.tm_hour = 0;
+							tm1.tm_min = 0;
+							tm1.tm_sec = gaps;
+							constructTime(point, tm2,
+											tm1.tm_year, tm1.tm_mon, tm1.tm_mday,
+											tm1.tm_hour, tm1.tm_min, tm1.tm_sec, tm1.tm_isdst);
+							strftime(strTime, sizeof(strTime), "%H:%M:%S", &tm2);
+
+							_log.Log(LOG_STATUS, "timer how much minute need to passes %s", strTime);
+						}
+						else
+						{
+							strcpy (strTime, "00:00:00");
+						}
+						root["result"][ii]["gaps"] = strTime;
+					}
+
 
 					for (const auto& info : reqInfo)
 					{
@@ -1320,9 +1410,11 @@ namespace http {
 				return; //Only admin user allowed
 			}
 
+			bool isApp = false;
 			std::string idx;
 			if (!client.empty() && client != "web") {
 				idx = ConverParams(req, false);
+				isApp = true;
 			} else {
 				idx = request::findValue(&req, "idx");
 			}
@@ -1359,14 +1451,17 @@ namespace http {
 			int Month = tm1.tm_mon + 1;
 			int Day = tm1.tm_mday;
 
-			if (iTimerType == TTYPE_FIXEDDATETIME)
+			if (false == isApp && iTimerType == TTYPE_FIXEDDATETIME)
 			{
-				if (sdate.size() == 10)
+				if (sdate.size() != 10)
 				{
-					Year = atoi(sdate.substr(0, 4).c_str());
-					Month = atoi(sdate.substr(5, 2).c_str());
-					Day = atoi(sdate.substr(8, 2).c_str());
+					_log.Log(LOG_ERROR, "The fixed date: %s", sdate.c_str());
+					return;
 				}
+
+				Year = atoi(sdate.substr(0, 4).c_str());
+				Month = atoi(sdate.substr(5, 2).c_str());
+				Day = atoi(sdate.substr(8, 2).c_str());
 			}
 			else if (iTimerType == TTYPE_MONTHLY)
 			{
@@ -1393,13 +1488,65 @@ namespace http {
 
 			unsigned char hour = atoi(shour.c_str());
 			unsigned char min = atoi(smin.c_str());
-			unsigned char icmd = atoi(scmd.c_str());
+			unsigned char icmd  = 0;
 			int days = atoi(sdays.c_str());
 			unsigned char level = atoi(slevel.c_str());
 			_tColor color = _tColor(scolor);
 			int mday = atoi(smday.c_str());
 			int month = atoi(smonth.c_str());
 			int occurence = atoi(soccurence.c_str());
+
+			if (hour >= 24 || min >= 60)
+			{
+				_log.Log(LOG_ERROR, "AddTimer:the hour or min invaild, hour:%s min:%s", shour.c_str(), smin.c_str());
+				return;
+			}
+			if (true == isApp && iTimerType == TTYPE_FIXEDDATETIME)
+			{
+				tm1.tm_hour += hour;
+				tm1.tm_min += min;
+				struct tm tm2;
+				time_t time2;
+				constructTime(time2, tm2,
+							  tm1.tm_year+1900, tm1.tm_mon+1,tm1.tm_mday,
+							  tm1.tm_hour, tm1.tm_min, 0, tm1.tm_isdst);
+				Year = tm2.tm_year + 1900;
+				Month = tm2.tm_mon + 1;
+				Day =  tm2.tm_mday;
+				hour = tm2.tm_hour;
+				min = tm2.tm_min;
+				_log.Log(LOG_STATUS, "add %04d-%02d-%02d  %02d:%02d", Year, Month, Day, hour, min);
+			}
+
+
+			if (isApp)
+			{
+				auto result = m_sql.safe_query("SELECT HardwareID, DeviceID, Unit, Type, SubType, SwitchType, Options FROM DeviceStatus WHERE (ID=='%q')",
+					idx.c_str());
+				if (result.empty())
+				{
+					_log.Log(LOG_ERROR, "AddTimer:get Device status failed at idx:%s", idx.c_str());
+					return;
+				}
+				int dType = atoi(result[0][3].c_str());
+				int sType = atoi(result[0][4].c_str());
+				_eSwitchType switchtype = (_eSwitchType)atoi(result[0][5].c_str());
+				std::map<std::string, std::string> options = m_sql.BuildDeviceOptions(result[0][6].c_str());
+				bool res = GetLightCommand(dType, sType, switchtype, scmd, icmd, options);
+				if (false == res)
+				{
+					_log.Log(LOG_ERROR, "AddTimer:get light command failed, plaese check the cmd: %s, device type:%d  subtype:%d switchtype:%d",
+											scmd.c_str(), dType, sType, (int)switchtype);
+					return;
+				}
+			}
+			else
+			{
+				/* yp change the timer cmd */
+				int tmp = atoi(scmd.c_str());
+				icmd = (tmp == 0)? TCMD_ON:TCMD_OFF;
+			}
+
 			root["status"] = "OK";
 			root["title"] = "AddTimer";
 			m_sql.safe_query(
@@ -1424,13 +1571,25 @@ namespace http {
 
 		void CWebServer::Cmd_UpdateTimer(WebEmSession & session, const request& req, Json::Value &root)
 		{
+			std::string client = request::findValue(&req, "client");
+			if (!client.empty()) {
+				boost::to_lower(client);
+			}
+
 			if (session.rights != 2)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
 			}
 
-			std::string idx = request::findValue(&req, "idx");
+			bool isApp = false;
+			std::string idx;
+			if (!client.empty() && client != "web") {
+				isApp = true;
+			}
+
+			idx = request::findValue(&req, "idx");
+
 			std::string active = request::findValue(&req, "active");
 			std::string stimertype = request::findValue(&req, "timertype");
 			std::string sdate = request::findValue(&req, "date");
@@ -1464,7 +1623,7 @@ namespace http {
 			int Month = tm1.tm_mon + 1;
 			int Day = tm1.tm_mday;
 
-			if (iTimerType == TTYPE_FIXEDDATETIME)
+			if (false == isApp && iTimerType == TTYPE_FIXEDDATETIME)
 			{
 				if (sdate.size() == 10)
 				{
@@ -1498,13 +1657,74 @@ namespace http {
 
 			unsigned char hour = atoi(shour.c_str());
 			unsigned char min = atoi(smin.c_str());
-			unsigned char icmd = atoi(scmd.c_str());
+			unsigned char icmd = 0;
 			int days = atoi(sdays.c_str());
 			unsigned char level = atoi(slevel.c_str());
 			_tColor color = _tColor(scolor);
 			int mday = atoi(smday.c_str());
 			int month = atoi(smonth.c_str());
 			int occurence = atoi(soccurence.c_str());
+
+			if (hour >= 24 || min >= 60)
+			{
+				_log.Log(LOG_ERROR, "AddTimer:the hour or min invaild, hour:%s min:%s", shour.c_str(), smin.c_str());
+				return;
+			}
+
+			if (true == isApp && iTimerType == TTYPE_FIXEDDATETIME)
+			{
+				tm1.tm_hour += hour;
+				tm1.tm_min += min;
+				struct tm tm2;
+				time_t time2;
+				constructTime(time2, tm2,
+							  tm1.tm_year+1900, tm1.tm_mon+1, tm1.tm_mday,
+							  tm1.tm_hour, tm1.tm_min, 0, tm1.tm_isdst);
+				Year = tm2.tm_year + 1900;
+				Month = tm2.tm_mon + 1;
+				Day =  tm2.tm_mday;
+				hour = tm2.tm_hour;
+				min = tm2.tm_min;
+				_log.Log(LOG_STATUS, "update %04d-%02d-%02d  %02d:%02d", Year, Month, Day, hour, min);
+			}
+			auto result =  m_sql.safe_query("select DeviceRowID from Timers where ID == %q", idx.c_str());
+			if (result.empty())
+			{
+				_log.Log(LOG_ERROR, "UpdateTimer:get Device idx failed at timer idx:%s", idx.c_str());
+				return;
+			}
+
+			if (isApp)
+			{
+				std::string devIdx = result[0][0];
+				result = m_sql.safe_query("SELECT HardwareID, DeviceID, Unit, Type, SubType, SwitchType, Options FROM DeviceStatus WHERE (ID=='%q')",
+					devIdx.c_str());
+				if (result.empty())
+				{
+					_log.Log(LOG_ERROR, "UpdateTimer:get Device status failed at device idx:%s", devIdx.c_str());
+					return;
+				}
+
+				int dType = atoi(result[0][3].c_str());
+				int sType = atoi(result[0][4].c_str());
+				_eSwitchType switchtype = (_eSwitchType)atoi(result[0][5].c_str());
+				std::map<std::string, std::string> options = m_sql.BuildDeviceOptions(result[0][6].c_str());
+				bool res = GetLightCommand(dType, sType, switchtype, scmd, icmd, options);
+				if (false == res)
+				{
+					_log.Log(LOG_ERROR, "UpdateTimer:get light command failed, plaese check the cmd: %s, device type:%d  subtype:%d switchtype:%d",
+											scmd.c_str(), dType, sType, (int)switchtype);
+					return;
+				}
+
+			}
+			else
+			{
+				/* yp change the timer cmd */
+				int tmp = atoi(scmd.c_str());
+				icmd = (tmp == 0)? TCMD_ON:TCMD_OFF;
+			}
+
 			root["status"] = "OK";
 			root["title"] = "UpdateTimer";
 			m_sql.safe_query(

@@ -75,11 +75,19 @@ enum _eTimerType
 	TTYPE_END
 };
 
+
+typedef int _eTimerCommand;
+
+#define TCMD_OFF  0
+#define TCMD_ON   1
+
+#if 0
 enum _eTimerCommand
 {
 	TCMD_ON = 0,
 	TCMD_OFF
 };
+#endif
 
 enum _eMediaStatus
 {

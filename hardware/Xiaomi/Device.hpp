@@ -63,6 +63,7 @@ class Device
 		void  setOnline(bool status);
 		void updateTimestamp(time_t t);
 		time_t getTimestamp();
+		bool checkTimeout();
 
 	public:
 		friend std::ostream & operator << (std::ostream& out, Device& device);
@@ -103,6 +104,7 @@ class Device
 		DevID	m_devID;
 		OnlineStatus m_online;
 		time_t m_timestamp;
+		int m_timeoutLevel;
 
 };
 

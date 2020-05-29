@@ -145,7 +145,7 @@ bool XiaomiGateway::StartHardware()
 	m_devInfoInited = false;
 	auto result =  m_sql.safe_query
 					("SELECT Password, Address FROM Hardware WHERE Type=%d AND ID=%d AND Enabled=1",
-		  			HTYPE_XiaomiGateway, m_HwdID);
+					HTYPE_XiaomiGateway, m_HwdID);
 
 	if (result.empty()){
 		_log.Log(LOG_ERROR, "Not find or not enable the hardware(type:%d, id=%d)",
@@ -160,8 +160,26 @@ bool XiaomiGateway::StartHardware()
 	if (!result.empty()){
 		m_outputMessage = true;
 	}
+
 	TokenManager::getInstance();
 	addGatewayToList();
+
+	result  = m_sql.safe_query ("select Model, Mac from DeviceStatus where HardwareID == %d", m_HwdID);
+	for (const auto& itt : result){
+		if (!getDevice(itt[1])){
+			const DevAttr* attr = XiaomiGateway::findDevAttr(itt[0]);
+			if (nullptr != attr)
+			{
+				std::shared_ptr<Device> dev(new Device (itt[1], attr));
+				XiaomiGateway::addDeviceToMap(itt[1], dev);
+			}
+			else
+			{
+				m_sql.safe_query ("delete from DeviceStatus where HardwareID == %d and Mac =='%q'",
+					m_HwdID, itt[1].c_str());
+			}
+		}
+	}
 
 	m_thread = std::shared_ptr<std::thread>(new std::thread(&XiaomiGateway::Do_Work, this));
 	SetThreadNameInt(m_thread->native_handle());
@@ -307,6 +325,7 @@ void XiaomiGateway::Do_Work()
 	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Worker started...", m_HwdID);
 
 	int sec_counter = 0;
+	bool timeout;
 	while (!IsStopRequested(1000))
 	{
 		sec_counter++;
@@ -314,8 +333,8 @@ void XiaomiGateway::Do_Work()
 		{
 			m_LastHeartbeat = mytime(NULL);
 		}
-#if 0
-		if (sec_counter % (20) == 0)
+
+		if (sec_counter % (60) == 0)
 		{
 			time_t now = time(NULL);
 			time_t ts;
@@ -323,16 +342,15 @@ void XiaomiGateway::Do_Work()
 			for (const auto & itt : m_deviceMap)
 			{
 				dev = itt.second;
-				ts = dev->getTimestamp();
-				if (now - ts > (60*10))
+				timeout = dev->checkTimeout();
+				if (true == timeout)
 				{
 					setOnlineStatus(dev, false);
-					_log.Log(LOG_STATUS, "have device timeout for 30min, offline. model:%s  mac:%s",
+					_log.Log(LOG_STATUS, "have device timeout for 30min, offline. model:%s	mac:%s",
 									dev->getZigbeeModel().c_str(), dev->getMac().c_str());
 				}
 			}
 		}
-#endif
 	}
 	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): stopped", m_HwdID);
 }
@@ -398,7 +416,7 @@ void XiaomiGateway::initDeviceAttrMap(const DevInfo devInfo[], int size)
 	return;
 }
 
-const DevAttr* XiaomiGateway::findDevAttr(std::string& model)
+const DevAttr* XiaomiGateway::findDevAttr(const std::string& model)
 {
 	auto it = m_attrMap.find(model);
 	if (it == m_attrMap.end()){
@@ -408,7 +426,7 @@ const DevAttr* XiaomiGateway::findDevAttr(std::string& model)
 	return it->second;
 }
 
-void XiaomiGateway::addDeviceToMap(std::string& mac, std::shared_ptr<Device> ptr)
+void XiaomiGateway::addDeviceToMap(const std::string& mac, std::shared_ptr<Device> ptr)
 {
 	if (!ptr){
 		_log.Log(LOG_ERROR, "add device to map, device null");
@@ -418,13 +436,13 @@ void XiaomiGateway::addDeviceToMap(std::string& mac, std::shared_ptr<Device> ptr
 	_log.Debug(DEBUG_HARDWARE, "add device to map mac: %s", mac.c_str());
 }
 
-void XiaomiGateway::delDeviceFromMap(std::string& mac)
+void XiaomiGateway::delDeviceFromMap(const std::string& mac)
 {
 	m_deviceMap.erase(mac);
 	_log.Debug(DEBUG_HARDWARE, "delDeviceFromMap mac: %s", mac.c_str());
 }
 
-std::shared_ptr<Device> XiaomiGateway::getDevice(std::string& mac)
+std::shared_ptr<Device> XiaomiGateway::getDevice(const std::string& mac)
 {
 	std::shared_ptr<Device> ptr;
 	ptr.reset();
@@ -551,12 +569,13 @@ bool XiaomiGateway::WriteToHardware(const char * pdata, const unsigned char leng
 		return false;
 	}
 
+#if 0
 	if (getOnlineStatus(dev) == OnlineStatus::Offline){
 		_log.Log(LOG_STATUS, "device is offline, can't control. model:%s Mac:%s",
-							  param.model.c_str(), param.mac.c_str());
+							  dev->getZigbeeModel().c_str(), dev->getMac().c_str());
 		return false;
 	}
-
+#endif
 
 	const tRBUF *pCmd = reinterpret_cast<const tRBUF *>(pdata);
 	unsigned char packettype = pCmd->ICMND.packettype;
@@ -721,7 +740,6 @@ void XiaomiGateway::deviceListHandler(Json::Value& root)
 			del_cmd[keySid] = gwSid;
 			del_cmd[keyParams][0]["unsupported_device"] = sid;
 			message = JSonToRawString (del_cmd);
-			std::shared_ptr<std::string> send_buff(new std::string(message));
 			sendMessageToGateway(message);
 			_log.Log(LOG_ERROR, "XiaomiGateway: not support the device model:%s  mac:%s", sid.c_str(), model.c_str());
 			continue;
@@ -732,19 +750,20 @@ void XiaomiGateway::deviceListHandler(Json::Value& root)
 			std::shared_ptr<Device> dev(new Device (sid, attr));
 			XiaomiGateway::addDeviceToMap(sid, dev);
 			createDtDevice(dev);
-
-			Json::Value read_cmd;
-			read_cmd[keyCmd] = "read";
-			read_cmd[keySid] = sid;
-			message = JSonToRawString (read_cmd);
-			sendMessageToGateway(message);
 		}
 
 		std::string cmd = root[keyCmd].asString();
 		if(cmd == repNewDevList){
 			auto dev = getDevice(sid);
-			dev->updateTimestamp(time(nullptr));
 			setOnlineStatus(dev, true);
+		}
+		else if (cmd == rspDiscorey)
+		{
+			Json::Value read_cmd;
+			read_cmd[keyCmd] = "read";
+			read_cmd[keySid] = sid;
+			message = JSonToRawString (read_cmd);
+			sendMessageToGateway(message);
 		}
 
 	}
@@ -779,12 +798,17 @@ void XiaomiGateway::joinGatewayHandler(Json::Value& root)
 void XiaomiGateway::setOnlineStatus(std::shared_ptr<Device>& dev, bool status)
 {
 	OnlineStatus on = dev->getOnline();
+
+	/* if set online, update the timestamp by the way */
+	if (true == status){
+		dev->updateTimestamp(time(nullptr));
+	}
+
 	if ((status && on == OnlineStatus::Online) ||
 		(!status && on == OnlineStatus::Offline)){
-		_log.Log(LOG_STATUS, "device online status already is %d", status);
+		_log.Debug(DEBUG_HARDWARE, "device online status already is %d", status);
 		return;
-
-}
+	}
 
 	dev->setOnline(status);
 	std::string mac = dev->getMac();
@@ -800,6 +824,21 @@ void XiaomiGateway::setOnlineStatus(std::shared_ptr<Device>& dev, bool status)
 		}
 	}
 }
+
+
+
+void XiaomiGateway::setOnlineStatus(bool status)
+{
+	auto dev = getDevice(m_gwSid);
+	if (!dev)
+	{
+		_log.Log(LOG_ERROR, "get gateway manage device failed");
+		return;
+	}
+	setOnlineStatus(dev, status);
+}
+
+
 
 OnlineStatus XiaomiGateway::getOnlineStatus(std::shared_ptr<Device>& dev)
 {
@@ -1589,6 +1628,7 @@ void UdpServer::handleReceive(const boost::system::error_code & error, std::size
 		param.miGateway = static_cast<void*>(gateway);
 		dev->recvFrom(param);
 		gateway->setOnlineStatus(dev, true);
+		gateway->setOnlineStatus(true);
 
 		startReceive();
 		return;
@@ -1666,6 +1706,8 @@ std::string TokenManager::getSid(const std::string & ip)
 
 namespace http {
 	namespace server {
+		static std::map< std::string, std::vector<std::string> > sOldList;
+		static std::mutex sDevListLock;
 
 		void CWebServer::Cmd_AddZigbeeDevice(WebEmSession & session, const request& req, Json::Value &root)
 		{
@@ -1701,13 +1743,20 @@ namespace http {
 				root["status"] = "OK";
 				root["title"] = "AddZigbeeDevice";
 			}
+
+			std::unique_lock<std::mutex> lock(sDevListLock);
+			std::vector<std::vector<std::string> > result;
+			result = m_sql.safe_query("SELECT Mac, name, Model FROM DeviceStatus WHERE (HardwareID=%d)", iHardwareID);
+
+			sOldList.clear();
+			for (const auto &itt : result){
+				sOldList.insert(std::make_pair(itt[0], itt));
+			}
 		}
 
 		void CWebServer::Cmd_GetNewDevicesList(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			static int sHwId = 0;
 			static int sRandom = 0;
-			static std::map< std::string, std::vector<std::string> > sOldList;
 
 			if (session.rights != 2){
 				session.reply_status = reply::forbidden;
@@ -1743,24 +1792,11 @@ namespace http {
 			root["status"] = "OK";
 			root["title"] = "GetNewDevicesList";
 
+			std::unique_lock<std::mutex> lock(sDevListLock);
 			std::vector<std::vector<std::string> > result;
 			result = m_sql.safe_query("SELECT Mac, name, Model FROM DeviceStatus WHERE (HardwareID=%d)", iHardwareID);
 
-			/* start of get new list */
-			if(tmp != sRandom){
-
-				sRandom	= tmp;
-				sOldList.clear();
-				for (const auto &itt : result){
-					sOldList.insert(std::make_pair(itt[0], itt));
-				}
-				/* if dev_list null, add null at [0] */
-				root["dev_list"][0];
-				return;
-			}
-
 			int ii = 0;
-
 			for (const auto &itt : result){
 
 				auto iter = sOldList.find(itt[0]);

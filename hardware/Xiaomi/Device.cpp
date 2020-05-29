@@ -56,6 +56,8 @@ Device::Device(std::string mac, const DevAttr* devAttr):m_devAttr(devAttr)
 	m_devID.initID(mac, result);
 	m_online = OnlineStatus::Unknown;
 	m_timestamp = time(nullptr);
+	m_timeoutLevel = m_devAttr->getTimeout();
+	std::cout<<"m_timeoutLevel:"<<m_timeoutLevel<<std::endl;
 }
 
 
@@ -66,12 +68,15 @@ bool  Device::writeTo(WriteParam& param)
 	int subtype = param.subType;
 	int unit = param.unit;
 
+#if 0
 	if (OnlineStatus::Offline == m_online)
 	{
 		_log.Log(LOG_STATUS, "writeTo:the device is offline, can't control. model:%s Mac:%s",
 							  getZigbeeModel().c_str(), getMac().c_str());
 		return false;
 	}
+#endif
+
 	param.mac = getMac();
 	param.model = getZigbeeModel();
 
@@ -96,10 +101,11 @@ void Device::recvFrom(ReadParam& param)
 	{
 		itt->recvFrom(param);
 	}
+#if 0
 	m_timestamp = time(nullptr);
 	_log.Log(LOG_STATUS, "recvFrom timestamp %ld . model:%s mac:%s",
 							m_timestamp, getZigbeeModel().c_str(), getMac().c_str());
-
+#endif
 	return;
 }
 
@@ -141,6 +147,34 @@ void  Device::setOnline(bool status)
 	{
 		m_online = OnlineStatus::Offline;
 	}
+}
+
+bool Device::checkTimeout()
+{
+	std::string pri;
+	switch(m_online)
+	{
+		case OnlineStatus::Offline:
+			pri = "Offline";
+		break;
+		case OnlineStatus::Online:
+			pri = "Online";
+		break;
+		case OnlineStatus::Unknown:
+			pri = "unknown";
+		break;
+	}
+	_log.Debug(DEBUG_HARDWARE, "MAC:%s status:%s", getZigbeeModel().c_str(), pri.c_str());
+
+	if (m_online != OnlineStatus::Offline)
+	{
+		time_t now = time(nullptr);
+		if (now - m_timestamp > m_timeoutLevel)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 }

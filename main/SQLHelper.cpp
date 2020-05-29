@@ -3255,13 +3255,13 @@ bool CSQLHelper::OpenDatabase()
 	{
 		UpdatePreferencesVar("ShowUpdateEffect", 0);
 	}
-	nValue = 10;
+	nValue = 30;
 	if (!GetPreferencesVar("ShortLogInterval", nValue))
 	{
 		UpdatePreferencesVar("ShortLogInterval", nValue);
 	}
 	if (nValue < 1)
-		nValue = 10;
+		nValue = 30;
 	m_ShortLogInterval = nValue;
 
 	if (!GetPreferencesVar("SendErrorsAsNotification", nValue))
@@ -3288,6 +3288,17 @@ bool CSQLHelper::OpenDatabase()
 	{
 		UpdatePreferencesVar("WebLocalNetworks", "127.0.0.1");
 	}
+
+	if ((!GetPreferencesVar("WebUserName", sValue)) || (sValue.empty()))
+	{
+		UpdatePreferencesVar("WebUserName", "aW90bWJi");
+	}
+	if ((!GetPreferencesVar("WebPassword", sValue)) || (sValue.empty()))
+	{
+		UpdatePreferencesVar("WebPassword", "efb9c21f2531f190346911aac96deb6c");
+	}
+
+
 
 	//Start background thread
 	if (!StartThread())

@@ -20,6 +20,7 @@ public:
 	std::string model;
 	std::string vendor;
 	std::list<const OutletAttr*> outlet;
+	int timeout;
 };
 
 SsidPair idConvert_1(const std::string& mac);
@@ -51,6 +52,7 @@ public:
 	std::string getZigbeeModel() const {return m_zigbeeModel;}
 	std::string getModel() const {return m_model;}
 	std::string getVendor() const {return m_vendor;}
+	int getTimeout() const {return m_timeoutLevel;}
 	const OutletAttr* getOutlet(int Outlet) const
 	{
 		if (Outlet >= m_Outlet.size())
@@ -72,6 +74,7 @@ private:
 	std::string m_model;
 	std::string m_vendor;
 	std::vector<const OutletAttr*> m_Outlet; 
+	int m_timeoutLevel;
 };
 
 

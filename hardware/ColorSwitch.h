@@ -124,3 +124,4 @@ struct _tColorSwitch {
 //#define Color_SetKelvinLevel 33
 #define Color_DiscoSpeedMinimal 34
 #define Color_DiscoSpeedMaximal 35
+#define Color_LedToggle 37

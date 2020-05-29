@@ -22,6 +22,7 @@ DevAttr::DevAttr(const DevInfo& devInfo)
 	m_zigbeeModel = devInfo.zigbeeModel;
 	m_model = devInfo.model;
 	m_vendor = devInfo.vendor;
+	m_timeoutLevel = devInfo.timeout;
 	std::cout<<"DevAttr devInfo list size:"<<devInfo.outlet.size()<<std::endl;
 
 	for (const auto &itt : devInfo.outlet)

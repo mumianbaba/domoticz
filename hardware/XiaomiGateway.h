@@ -42,11 +42,11 @@ public:
 
 public:
 	static void initDeviceAttrMap(const DevInfo devInfo[], int size);
-	static const DevAttr* findDevAttr(std::string& model);
+	static const DevAttr* findDevAttr(const std::string& model);
 	static bool checkZigbeeMac(const std::string& mac);
-	void addDeviceToMap(std::string& mac, std::shared_ptr<Device> ptr);
-	void delDeviceFromMap(std::string& mac);
-	std::shared_ptr<Device> getDevice(std::string& mac);
+	void addDeviceToMap(const std::string& mac, std::shared_ptr<Device> ptr);
+	void delDeviceFromMap(const std::string& mac);
+	std::shared_ptr<Device> getDevice(const std::string& mac);
 	std::shared_ptr<Device> getDevice(unsigned int ssid, int type, int subType, int unit);
 	bool createDtDevice(std::shared_ptr<Device> dev);
 
@@ -60,6 +60,7 @@ public:
 	void updateHardwareInfo(const std::string& model, const std::string& mac);
 	std::string getGatewayIp();
 	void setOnlineStatus(std::shared_ptr<Device>& dev, bool status);
+	void setOnlineStatus(bool status);
 	OnlineStatus getOnlineStatus(std::shared_ptr<Device>& dev);
 public:
 

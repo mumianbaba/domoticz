@@ -224,6 +224,8 @@
 #define gswitch_sColor				0x19
 #define gswitch_sDiscop				0x1a
 #define gswitch_sDiscom				0x1b
+#define gswitch_Toggle				0x1c
+
 
 //--------------
 

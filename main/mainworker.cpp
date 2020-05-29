@@ -11598,6 +11598,15 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string>& sd, std::string 
 	_eSwitchType switchtype = (_eSwitchType)atoi(sd[5].c_str());
 	std::map<std::string, std::string> options = m_sql.BuildDeviceOptions(sd[10].c_str());
 
+
+	if ( switchcmd == "Set Level" || switchcmd == "Set Color"){
+		int nValue = atoi(sd[7].c_str());
+		if (nValue == 0){
+			_log.Log(LOG_ERROR, "cmd : %s, but the status is 0", switchcmd.c_str());
+			return false;
+		}
+	}
+
 	//when asking for Toggle, just switch to the opposite value
 	if (switchcmd == "Toggle") {
 		//Request current state of switch
@@ -11619,8 +11628,8 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string>& sd, std::string 
 	if (level <= 0 && switchcmd == "Set Level")
 		switchcmd = "Off";
 
-	//when level is invalid or command is "On", replace level with "LastLevel"
-	if (switchcmd == "On" || level < 0)
+	//when level is invalid or command is "On" or "Set Color", replace level with "LastLevel"
+	if (switchcmd == "On" || (switchcmd == "Set Color" && level <= 0)  || level < 0)
 	{
 		//Get LastLevel
 		std::vector<std::vector<std::string> > result;
@@ -13304,6 +13313,7 @@ bool MainWorker::SwitchScene(const uint64_t idx, std::string switchcmd, const st
 
 		int cmd = atoi(sd[1].c_str());
 		int level = atoi(sd[2].c_str());
+		std::string slevel = sd[2];
 		_tColor color(sd[3]);
 		int ondelay = atoi(sd[4].c_str());
 		int offdelay = atoi(sd[5].c_str());
@@ -13313,7 +13323,7 @@ bool MainWorker::SwitchScene(const uint64_t idx, std::string switchcmd, const st
 		if (!result2.empty())
 		{
 			std::vector<std::string> sd2 = result2[0];
-			//uint8_t rnValue = atoi(sd2[6].c_str());
+			uint8_t rnValue = atoi(sd2[6].c_str());
 			std::string sValue = sd2[7];
 			//uint8_t Unit = atoi(sd2[2].c_str());
 			uint8_t dType = atoi(sd2[3].c_str());
@@ -13336,7 +13346,7 @@ bool MainWorker::SwitchScene(const uint64_t idx, std::string switchcmd, const st
 			int maxDimLevel = 0;
 			std::vector<std::string> cmdList;
 
-			GetLightStatus(dType, dSubType, switchtype, cmd, sValue, lstatus, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
+			GetLightStatus(dType, dSubType, switchtype, cmd, slevel, lstatus, llevel, bHaveDimmer, maxDimLevel, bHaveGroupCmd);
 
 			if (scenetype == SGTYPE_GROUP)
 			{
@@ -13347,8 +13357,8 @@ bool MainWorker::SwitchScene(const uint64_t idx, std::string switchcmd, const st
 
 			int ilevel = maxDimLevel - 1; // Why -1?
 
-			if (
-				((switchtype == STYPE_Dimmer) ||
+			//(switchtype == STYPE_Dimmer) ||
+			if ((
 				(switchtype == STYPE_BlindsPercentage) ||
 					(switchtype == STYPE_BlindsPercentageInverted) ||
 					(switchtype == STYPE_Selector)
@@ -13375,22 +13385,44 @@ bool MainWorker::SwitchScene(const uint64_t idx, std::string switchcmd, const st
 
 			if (switchtype == STYPE_Dimmer)
 			{
-				if (lstatus == "Set Level")
+				float fLevel = (maxDimLevel / 100.0f) * level;
+				if (fLevel > 100)
+					fLevel = 100;
+				ilevel = round(fLevel);
+
+				_log.Log(LOG_NORM, "witchscene led lstatus: %s", lstatus.c_str());
+				if (lstatus == "On")
 				{
 					cmdList.emplace_back("On");
 					if (color.mode ==  ColorModeNone)
 					{
-						cmdList.emplace_back("Set Level");
+						if (ilevel > 0)
+						{
+							cmdList.emplace_back("Set Level");
+						}
 					}
 					else
 					{
 						cmdList.emplace_back("Set Color");
 					}
 				}
-				else{
-					cmdList.emplace_back(lstatus);
+				else if (lstatus.find("Set Level") != std::string::npos){
+
+					if (color.mode !=  ColorModeNone)
+					{
+						cmdList.emplace_back("Set Color");
+					}
+					else{
+						cmdList.emplace_back("Set Level");
+					}
 				}
 			}
+
+			if (cmdList.empty())
+			{
+				cmdList.emplace_back(lstatus);
+			}
+
 			int idx = atoi(sd[0].c_str());
 			if (switchtype != STYPE_PushOn)
 			{

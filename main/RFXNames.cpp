@@ -1565,6 +1565,9 @@ void GetLightStatus(
 		case gswitch_sProgram:
 			lstatus = "Program";
 			break;
+		case gswitch_Toggle:
+			lstatus = "Toggle";
+			break;
 		}
 		break;
 	case pTypeFS20:
@@ -1690,6 +1693,9 @@ void GetLightStatus(
 			break;
 		case Color_DiscoMode_9:
 			lstatus = "Disco Mode 9";
+			break;
+		case Color_LedToggle:
+			lstatus = "Toggle";
 			break;
 		}
 		break;
@@ -2867,6 +2873,11 @@ bool GetLightCommand(
 			cmd = gswitch_sProgram;
 			return true;
 		}
+		if (switchcmd == "Toggle")
+		{
+			cmd = gswitch_Toggle;
+			return true;
+		}
 		break;
 	case pTypeColorSwitch:
 		if (switchcmd == "Off")
@@ -3010,6 +3021,11 @@ bool GetLightCommand(
 		else if (switchcmd == "Cooler")
 		{
 			cmd = Color_CoolWhiteIncrease;
+			return true;
+		}
+		else if (switchcmd == "Toggle")
+		{
+			cmd = Color_LedToggle;
 			return true;
 		}
 		else

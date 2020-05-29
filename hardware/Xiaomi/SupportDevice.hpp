@@ -198,7 +198,8 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "TBL-V01-GL",
 		model : "xxxxx",
 		vendor : "tenbay",
-		outlet : {&tenbayGW}
+		outlet : {&tenbayGW},
+		timeout : 1800
 	},
 	/* onoff */
 	{
@@ -206,28 +207,32 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "lumi.ctrl_neutral2",
 		model : "QBKG03LM",
 		vendor : "lumi",
-		outlet : {&onoff0, &onoff1}
+		outlet : {&onoff0, &onoff1},
+		timeout : 1800
 	},
 	{
 		name : "Aqara Wall Single Switch",
 		zigbeeModel : "lumi.ctrl_neutral1",
 		model : "QBKG03LM",
 		vendor : "lumi",
-		outlet : {&onoff0}
+		outlet : {&onoff0},
+		timeout : 1800
 	},
 	{
 		name : "Tuya Wall Dual Switch",
 		zigbeeModel : "TS0012",
 		model : "TY-ZL-UN-LB2-W",
 		vendor : "tuya",
-		outlet : {&onoff0, &onoff1}
+		outlet : {&onoff0, &onoff1},
+		timeout : 1800
 	},
 	{
 		name : "Tuya Wall Single Switch",
 		zigbeeModel : "TS0011",
 		model : "TY-ZL-UN-LB1-W",
 		vendor : "tuya",
-		outlet : {&onoff0}
+		outlet : {&onoff0},
+		timeout : 1800
 	},
 	/* door sensor */
 	{
@@ -235,7 +240,8 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "lumi.sensor_magnet.aq2",
 		model : "MCCGQ11LM",
 		vendor : "lumi",
-		outlet : {&SensorContact}
+		outlet : {&SensorContact},
+		timeout : 7200
 	},
 	{
 		name : "Feibit Door Sensor",
@@ -243,7 +249,8 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "FNB54-DOS09ML",
 		model : "NDOS109W-N1",
 		vendor : "feibit",
-		outlet : {&SensorContact}
+		outlet : {&SensorContact},
+		timeout : 7200
 	},
 	/* wleak sensor */
 	{
@@ -251,7 +258,8 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "lumi.sensor_wleak.aq1",
 		model : "SJCGQ11LM",
 		vendor : "lumi",
-		outlet : {&SensorWLeak}
+		outlet : {&SensorWLeak},
+		timeout : 7200
 	},
 	{
 		name : "Feibit Water Sensor",
@@ -259,7 +267,8 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "FNB54-WTS08ML",
 		model : "NWTS108W-N1",
 		vendor : "feibit",
-		outlet : {&SensorWLeak}
+		outlet : {&SensorWLeak},
+		timeout : 7200
 	},
 	/* gas sensor */
 	{
@@ -268,7 +277,8 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "FNB54-GAS07ML",
 		model : "NGAS107W-N1",
 		vendor : "feibit",
-		outlet : {&SensorGas}
+		outlet : {&SensorGas},
+		timeout : 7200
 	},
 	/* smoke sensor */
 	{
@@ -277,7 +287,8 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "FNB54-SMF0AML",
 		model : "NSMF10AW-N1",
 		vendor : "feibit",
-		outlet : {&SensorSmoke}
+		outlet : {&SensorSmoke},
+		timeout : 7200
 	},
 	/* motion sensor */
 	{
@@ -285,14 +296,16 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "lumi.sensor_motion.aq2",
 		model : "RTCGQ11LM",
 		vendor : "lumi",
-		outlet : {&SensorMotion, &lux}
+		outlet : {&SensorMotion, &lux},
+		timeout : 7200
 	},
 	{
 		name : "Tuya Motion Sensor",
 		zigbeeModel : "RH3040",
 		model : "TP001-ZA",
 		vendor : "tuya",
-		outlet : {&SensorMotion}
+		outlet : {&SensorMotion},
+		timeout : 7200
 	},
 	{
 		name : "Feibit Motion Sensor",
@@ -300,7 +313,8 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "FNB54-BOT0AML",
 		model : "NTHM217W-N1",
 		vendor : "feibit",
-		outlet : {&SensorMotion}
+		outlet : {&SensorMotion},
+		timeout : 7200
 	},
 	/* plug */
 	{
@@ -308,7 +322,8 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "lumi.plug.maeu01",
 		model : "SP-EUC01",
 		vendor : "lumi",
-		outlet : {&onoff0, &kwh}
+		outlet : {&onoff0, &kwh},
+		timeout : 1800
 	},
 	/* selector */
 	{
@@ -316,49 +331,56 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "lumi.vibration.aq1",
 		model : "DJT11LM",
 		vendor : "lumi",
-		outlet : {&SelectorVib}
+		outlet : {&SelectorVib},
+		timeout : 7200
 	},
 	{
 		name : "Aqara Wireless Single Switch",
 		zigbeeModel : "lumi.remote.b186acn01",
 		model : "WXKG03LM",
 		vendor : "lumi",
-		outlet : {&SelectorWirlessOne}
+		outlet : {&SelectorWirlessOne},
+		timeout : 7200
 	},
 	{
 		name : "Aqara Wireless Dual Switch",
 		zigbeeModel : "lumi.remote.b286acn01",
 		model : "WXKG02LM",
 		vendor : "lumi",
-		outlet : {&SelectorWirlessTow}
+		outlet : {&SelectorWirlessTow},
+		timeout : 7200
 	},
 	{
 		name : "Aqara Mini Switch Plus",
 		zigbeeModel : "lumi.sensor_switch.aq3",
 		model : "WXKG12LM",
 		vendor : "lumi",
-		outlet : {&SelectorWirlessOnePlus}
+		outlet : {&SelectorWirlessOnePlus},
+		timeout : 7200
 	},
 	{
 		name : "Aqara Cube",
 		zigbeeModel : "lumi.sensor_cube.aqgl01",
 		model : "MFKZQ01LM",
 		vendor : "lumi",
-		outlet : {&SelectorCube}
+		outlet : {&SelectorCube},
+		timeout : 7200
 	},
 	{
 		name : "Aqara Mini Switch",
 		zigbeeModel : "lumi.remote.b1acn01",
 		model : "WXKG11LM",
 		vendor : "lumi",
-		outlet : {&SelectorWirlessOne}
+		outlet : {&SelectorWirlessOne},
+		timeout : 7200
 	},
 	{
 		name : "Tuya Wireless Single Switch",
 		zigbeeModel : "TS0041",
 		model : "DJT11LM",
 		vendor : "tuya",
-		outlet : {&SelectorWirlessOne}
+		outlet : {&SelectorWirlessOne},
+		timeout : 7200
 	},
 	/* weather */
 	{
@@ -366,14 +388,16 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "lumi.weather",
 		model : "WSDCGQ11LM",
 		vendor : "lumi",
-		outlet : {&weatherTHB}
+		outlet : {&weatherTHB},
+		timeout : 7200
 	},
 	{
 		name : "Tuya Temp Sensor",
 		zigbeeModel : "RH3052",
 		model : "TT081",
 		vendor : "tuya",
-		outlet : {&weatherTH}
+		outlet : {&weatherTH},
+		timeout : 7200
 	},
 	{
 		name : "Feibit Temp Sensor",
@@ -381,14 +405,16 @@ static const DevInfo  devInfoTab[] {
 		zigbeeModel : "FNB54-THM17ML",
 		model : "NTHM217W-N1",
 		vendor : "feibit",
-		outlet : {&weatherTH}
+		outlet : {&weatherTH},
+		timeout : 7200
 	},
 	{
 		name : "Aqara LED Bulb",
 		zigbeeModel : "lumi.light.aqcn02",
 		model : "ZNLDP12LM",
 		vendor : "lumi",
-		outlet : {&ledTemp}
+		outlet : {&ledTemp},
+		timeout : 1800
 	}
 };
 
