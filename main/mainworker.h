@@ -26,7 +26,6 @@ public:
 	bool Start();
 	bool Stop();
 
-	void InsertBuiltInTypeHardware();
 	void AddAllDomoticzHardware();
 	void StopDomoticzHardware();
 	void StartDomoticzHardware();

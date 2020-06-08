@@ -248,7 +248,7 @@ namespace http {
 			m_sql.UpdatePreferencesVar("FibaroActive", ilinkactive);
 			m_sql.UpdatePreferencesVar("FibaroVersion4", iisversion4);
 			m_sql.UpdatePreferencesVar("FibaroDebug", idebugenabled);
-			m_fibaropush.UpdateActive();
+			//m_fibaropush.UpdateActive();
 			root["status"] = "OK";
 			root["title"] = "SaveFibaroLinkConfig";
 		}

@@ -46,6 +46,7 @@ public:
 	static bool checkZigbeeMac(const std::string& mac);
 	void addDeviceToMap(const std::string& mac, std::shared_ptr<Device> ptr);
 	void delDeviceFromMap(const std::string& mac);
+	void clearDeviceFromMap();
 	std::shared_ptr<Device> getDevice(const std::string& mac);
 	std::shared_ptr<Device> getDevice(unsigned int ssid, int type, int subType, int unit);
 	bool createDtDevice(std::shared_ptr<Device> dev);
@@ -55,8 +56,8 @@ public:
 
 	bool isDevInfoInited(){return m_devInfoInited;}
 	void setDevInfoInited(bool flag){m_devInfoInited=flag;}
-	void joinGatewayHandler(Json::Value& root);
-	void deviceListHandler(Json::Value& root);
+	void joinGatewayHandler(const Json::Value& root);
+	void deviceListHandler(const Json::Value& root);
 	void updateHardwareInfo(const std::string& model, const std::string& mac);
 	std::string getGatewayIp();
 	void setOnlineStatus(std::shared_ptr<Device>& dev, bool status);
@@ -80,6 +81,12 @@ public:
 
 	void updateTempHum(const std::string &nodeId, const std::string &name, const std::string& temperature, const std::string&	humidity, const int battery);
 	void updateKwh(const std::string & nodeId, const std::string & name, const std::string& loadPower, const std::string& consumed, const int battery);
+public:
+	bool paramCheckSid(const Json::Value& json);
+	bool paramCheckModel(const Json::Value& json);
+	void sendUnsupportDevCmd(const std::string& sid, const std::string& model);
+	void sendReadCmd(const std::string& sid);
+
 
 public:
 	void addGatewayToList();
@@ -108,6 +115,7 @@ private:
 	std::string m_localIp;
 	std::string m_gwPassword;
 	std::shared_ptr<std::thread> m_thread;
+	std::mutex m_mutex;
 
 	bool m_devInfoInited;
 	DeviceMap m_deviceMap;
@@ -120,7 +128,6 @@ class UdpServer
 public:
 	UdpServer(const std::string &localIp);
 	~UdpServer();
-	bool initServer();
 
 public:
 	static UdpServer* getUdpServer()

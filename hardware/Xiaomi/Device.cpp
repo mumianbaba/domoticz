@@ -125,9 +125,19 @@ bool Device::match(unsigned int ssid, int type, int subType, int unit) const
 void Device::updateTimestamp(time_t t)
 {
 	m_timestamp = t;
-	_log.Log(LOG_STATUS, "updateTimestamp timestamp %ld . model:%s mac:%s",
+	_log.Debug(DEBUG_HARDWARE, "updateTimestamp timestamp %ld . model:%s mac:%s",
 							m_timestamp, getZigbeeModel().c_str(), getMac().c_str());
 }
+int Device::getTimeoutLevel()
+{
+	return m_timeoutLevel;
+}
+
+void Device::setTimeoutLevel(int level)
+{
+	m_timeoutLevel = level;
+}
+
 
 time_t Device::getTimestamp()
 {
@@ -148,6 +158,35 @@ void  Device::setOnline(bool status)
 		m_online = OnlineStatus::Offline;
 	}
 }
+
+
+bool Device::checkTimeout(time_t now)
+{
+	std::string pri;
+	switch(m_online)
+	{
+		case OnlineStatus::Offline:
+			pri = "Offline";
+		break;
+		case OnlineStatus::Online:
+			pri = "Online";
+		break;
+		case OnlineStatus::Unknown:
+			pri = "unknown";
+		break;
+	}
+	_log.Debug(DEBUG_HARDWARE, "MAC:%s status:%s", getZigbeeModel().c_str(), pri.c_str());
+
+	if (m_online != OnlineStatus::Offline)
+	{
+		if (now - m_timestamp > m_timeoutLevel)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 
 bool Device::checkTimeout()
 {

@@ -531,7 +531,7 @@ void Do_Watchdog_Work()
 {
 	while(!g_stop_watchdog)
 	{
-		sleep_milliseconds(1000);
+		sleep_milliseconds(4000);
 		heartbeat_check();
 	}
 }

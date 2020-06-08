@@ -699,9 +699,12 @@ bool CSQLHelper::OpenDatabase()
 			_log.Log(LOG_ERROR, "DB_Version get failed when not first install, fatal error");
 			_log.Log(LOG_ERROR, "DB_Version get failed when not first install, fatal error");
 			_log.Log(LOG_ERROR, "DB_Version get failed when not first install, fatal error");
-			return false;
 		}
-		_log.Log(LOG_STATUS, "DB_Version get successful, dbversion:%d", dbversion);
+		else
+		{
+			_log.Log(LOG_STATUS, "DB_Version get successful, dbversion:%d", dbversion);
+		}
+
 		if (dbversion > DB_VERSION)
 		{
 			//User is using a newer database on a old Domoticz version
@@ -818,6 +821,8 @@ bool CSQLHelper::OpenDatabase()
 
 	if ((!bNewInstall) && (dbversion < DB_VERSION))
 	{
+		_log.Log(LOG_ERROR, "The app version is not the %d, please take careful", DB_VERSION);
+#if 0
 		//Post-SQL Patches
 		if (dbversion < 2)
 		{
@@ -2764,6 +2769,7 @@ bool CSQLHelper::OpenDatabase()
 				query("ALTER TABLE SceneLog ADD COLUMN [User] VARCHAR(100) DEFAULT ('')");
 			}
 		}
+#endif
 	}
 	else if (bNewInstall)
 	{
@@ -2774,6 +2780,15 @@ bool CSQLHelper::OpenDatabase()
 	}
 	UpdatePreferencesVar("DB_Version", DB_VERSION);
 
+	/* add a build in xiaomi gateway */
+	{
+		std::vector<std::vector<std::string> > res;
+		res = m_sql.safe_query("SELECT Enabled FROM Hardware WHERE (Type==%d) AND (Address=='%q')", HTYPE_XiaomiGateway, "127.0.0.1");
+		if (res.empty())
+		{
+			m_sql.safe_query("INSERT INTO Hardware (Name, Enabled, Type, Address, Port, SerialPort, Username, Password, DataTimeout) VALUES ('SM-4Z',1, %d,'127.0.0.1',9494, '9494','','', 1800)", HTYPE_XiaomiGateway);
+		}
+	}
 	//Make sure we have some default preferences
 	int nValue = 10;
 	std::string sValue;
@@ -3016,9 +3031,11 @@ bool CSQLHelper::OpenDatabase()
 	{
 		UpdatePreferencesVar("NotificationSwitchInterval", 0);
 	}
-	if ((!GetPreferencesVar("RemoteSharedPort", nValue)) || (nValue == 0))
+//	if ((!GetPreferencesVar("RemoteSharedPort", nValue)) || (nValue == 0))
+	if (!GetPreferencesVar("RemoteSharedPort", nValue))
 	{
-		UpdatePreferencesVar("RemoteSharedPort", 6144);
+		//UpdatePreferencesVar("RemoteSharedPort", 6144);
+		UpdatePreferencesVar("RemoteSharedPort", 0);
 	}
 	if ((!GetPreferencesVar("Language", sValue)) || (sValue.empty()))
 	{

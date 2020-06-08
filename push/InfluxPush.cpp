@@ -252,7 +252,7 @@ namespace http {
 			m_sql.UpdatePreferencesVar("InfluxUsername", username.c_str());
 			m_sql.UpdatePreferencesVar("InfluxPassword", base64_encode(password));
 			m_sql.UpdatePreferencesVar("InfluxDebug", idebugenabled);
-			m_influxpush.UpdateSettings();
+			//m_influxpush.UpdateSettings();
 			root["status"] = "OK";
 			root["title"] = "SaveInfluxLinkConfig";
 		}

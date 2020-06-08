@@ -189,10 +189,10 @@ extern http::server::CWebServerHelper m_webservers;
 extern bool g_bUseEventTrigger;
 extern std::string szRandomUUID;
 
-CFibaroPush m_fibaropush;
-CGooglePubSubPush m_googlepubsubpush;
-CHttpPush m_httppush;
-CInfluxPush m_influxpush;
+//CFibaroPush m_fibaropush;
+//CGooglePubSubPush m_googlepubsubpush;
+//CHttpPush m_httppush;
+//CInfluxPush m_influxpush;
 
 
 namespace tcp {
@@ -340,17 +340,6 @@ MainWorker::MainWorker()
 MainWorker::~MainWorker()
 {
 	Stop();
-}
-
-
-void MainWorker::InsertBuiltInTypeHardware()
-{
-	std::vector<std::vector<std::string> > result;
-	result = m_sql.safe_query("SELECT Enabled FROM Hardware WHERE (Type==%d) AND (Address=='%q')", HTYPE_XiaomiGateway, "127.0.0.1");
-	if (result.empty())
-	{
-		m_sql.safe_query("INSERT INTO Hardware (Name, Enabled, Type, Address, Port, SerialPort, Username, Password, DataTimeout) VALUES ('SM-4Z',1, %d,'127.0.0.1',9494, '9494','','', 1800)", HTYPE_XiaomiGateway);
-	}
 }
 
 
@@ -1236,12 +1225,11 @@ bool MainWorker::Start()
 	}
 #endif
 
-	InsertBuiltInTypeHardware();
 	AddAllDomoticzHardware();
-	m_fibaropush.Start();
-	m_httppush.Start();
-	m_influxpush.Start();
-	m_googlepubsubpush.Start();
+	//m_fibaropush.Start();
+	//m_httppush.Start();
+	//m_influxpush.Start();
+	//m_googlepubsubpush.Start();
 #ifdef PARSE_RFXCOM_DEVICE_LOG
 	if (m_bStartHardware == false)
 		m_bStartHardware = true;
@@ -1329,10 +1317,10 @@ bool MainWorker::Stop()
 		m_scheduler.StopScheduler();
 		m_eventsystem.StopEventSystem();
 		m_notificationsystem.Stop();
-		m_fibaropush.Stop();
-		m_httppush.Stop();
-		m_influxpush.Stop();
-		m_googlepubsubpush.Stop();
+		//m_fibaropush.Stop();
+		//m_httppush.Stop();
+		//m_influxpush.Stop();
+		//m_googlepubsubpush.Stop();
 #ifdef ENABLE_PYTHON
 		m_pluginsystem.StopPluginSystem();
 #endif

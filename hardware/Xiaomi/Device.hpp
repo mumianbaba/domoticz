@@ -59,10 +59,13 @@ class Device
 		virtual bool writeTo(WriteParam& param);
 
 	public:
+		int getTimeoutLevel();
+		void setTimeoutLevel(int level);
 		OnlineStatus getOnline();
 		void  setOnline(bool status);
 		void updateTimestamp(time_t t);
 		time_t getTimestamp();
+		bool checkTimeout(time_t now);
 		bool checkTimeout();
 
 	public:

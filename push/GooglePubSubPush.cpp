@@ -323,7 +323,7 @@ namespace http {
 			m_sql.UpdatePreferencesVar("GooglePubSubActive", ilinkactive);
 			m_sql.UpdatePreferencesVar("GooglePubSubDebug", idebugenabled);
 
-			m_googlepubsubpush.UpdateActive();
+			//m_googlepubsubpush.UpdateActive();
 			root["status"] = "OK";
 			root["title"] = "SaveGooglePubSubLinkConfig";
 		}

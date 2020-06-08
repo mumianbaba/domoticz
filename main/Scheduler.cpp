@@ -1584,8 +1584,10 @@ namespace http {
 
 			bool isApp = false;
 			std::string idx;
+			std::string devIdx;
 			if (!client.empty() && client != "web") {
 				isApp = true;
+				devIdx = ConverParams(req, false);
 			}
 
 			idx = request::findValue(&req, "idx");
@@ -1687,16 +1689,21 @@ namespace http {
 				min = tm2.tm_min;
 				_log.Log(LOG_STATUS, "update %04d-%02d-%02d  %02d:%02d", Year, Month, Day, hour, min);
 			}
-			auto result =  m_sql.safe_query("select DeviceRowID from Timers where ID == %q", idx.c_str());
-			if (result.empty())
+
+			std::vector<std::vector<std::string>> result;
+			if (devIdx.empty())
 			{
-				_log.Log(LOG_ERROR, "UpdateTimer:get Device idx failed at timer idx:%s", idx.c_str());
-				return;
+				result =  m_sql.safe_query("select DeviceRowID from Timers where ID == %q", idx.c_str());
+				if (result.empty())
+				{
+					_log.Log(LOG_ERROR, "UpdateTimer:get Device idx failed at timer idx:%s", idx.c_str());
+					return;
+				}
+				devIdx = result[0][0];
 			}
 
 			if (isApp)
 			{
-				std::string devIdx = result[0][0];
 				result = m_sql.safe_query("SELECT HardwareID, DeviceID, Unit, Type, SubType, SwitchType, Options FROM DeviceStatus WHERE (ID=='%q')",
 					devIdx.c_str());
 				if (result.empty())
@@ -1728,7 +1735,8 @@ namespace http {
 			root["status"] = "OK";
 			root["title"] = "UpdateTimer";
 			m_sql.safe_query(
-				"UPDATE Timers SET Active=%d, [Date]='%04d-%02d-%02d', Time='%02d:%02d', Type=%d, UseRandomness=%d, Cmd=%d, Level=%d, Color='%q', Days=%d, MDay=%d, Month=%d, Occurence=%d WHERE (ID == '%q')",
+				"UPDATE Timers SET DeviceRowID=%q, Active=%d, [Date]='%04d-%02d-%02d', Time='%02d:%02d', Type=%d, UseRandomness=%d, Cmd=%d, Level=%d, Color='%q', Days=%d, MDay=%d, Month=%d, Occurence=%d WHERE (ID == '%q')",
+				devIdx.c_str(),
 				(active == "true") ? 1 : 0,
 				Year, Month, Day,
 				hour, min,

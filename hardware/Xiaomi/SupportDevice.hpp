@@ -224,7 +224,7 @@ static const DevInfo  devInfoTab[] {
 		model : "TY-ZL-UN-LB2-W",
 		vendor : "tuya",
 		outlet : {&onoff0, &onoff1},
-		timeout : 1800
+		timeout : 7200
 	},
 	{
 		name : "Tuya Wall Single Switch",
@@ -232,7 +232,7 @@ static const DevInfo  devInfoTab[] {
 		model : "TY-ZL-UN-LB1-W",
 		vendor : "tuya",
 		outlet : {&onoff0},
-		timeout : 1800
+		timeout : 7200
 	},
 	/* door sensor */
 	{
