@@ -259,7 +259,7 @@ namespace http {
 	namespace server {
 		void CWebServer::Cmd_SaveHttpLinkConfig(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -302,7 +302,7 @@ namespace http {
 
 		void CWebServer::Cmd_GetHttpLinkConfig(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -361,7 +361,7 @@ namespace http {
 
 		void CWebServer::Cmd_GetHttpLinks(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -394,7 +394,7 @@ namespace http {
 
 		void CWebServer::Cmd_SaveHttpLink(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -449,7 +449,7 @@ namespace http {
 
 		void CWebServer::Cmd_DeleteHttpLink(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed

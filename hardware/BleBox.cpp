@@ -796,7 +796,7 @@ namespace http {
 	namespace server {
 		void CWebServer::Cmd_BleBoxGetNodes(WebEmSession& session, const request& req, Json::Value& root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -860,7 +860,7 @@ namespace http {
 
 		void CWebServer::Cmd_BleBoxSetMode(WebEmSession& session, const request& req, Json::Value& root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -894,7 +894,7 @@ namespace http {
 
 		void CWebServer::Cmd_BleBoxAddNode(WebEmSession & session, const request & req, Json::Value & root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -921,7 +921,7 @@ namespace http {
 
 		void CWebServer::Cmd_BleBoxRemoveNode(WebEmSession & session, const request & req, Json::Value & root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -947,7 +947,7 @@ namespace http {
 
 		void CWebServer::Cmd_BleBoxClearNodes(WebEmSession & session, const request & req, Json::Value & root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -966,7 +966,7 @@ namespace http {
 
 		void CWebServer::Cmd_BleBoxAutoSearchingNodes(WebEmSession & session, const request & req, Json::Value & root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -991,7 +991,7 @@ namespace http {
 
 		void CWebServer::Cmd_BleBoxUpdateFirmware(WebEmSession & session, const request & req, Json::Value & root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed

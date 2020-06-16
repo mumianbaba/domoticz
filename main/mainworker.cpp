@@ -28,6 +28,8 @@
 #include "../hardware/RFXComSerial.h"
 #include "../hardware/RFXComTCP.h"
 #include "../hardware/DomoticzTCP.h"
+#include "../hardware/plugins/Plugins.h"
+#ifdef FULL_HW_SUPPORTED
 #include "../hardware/P1MeterBase.h"
 #include "../hardware/P1MeterSerial.h"
 #include "../hardware/P1MeterTCP.h"
@@ -126,8 +128,6 @@
 #include "../hardware/ZiBlueSerial.h"
 #include "../hardware/ZiBlueTCP.h"
 #include "../hardware/Yeelight.h"
-#include "../hardware/XiaomiGateway.h"
-#include "../hardware/plugins/Plugins.h"
 #include "../hardware/Arilux.h"
 #include "../hardware/OpenWebNetUSB.h"
 #include "../hardware/InComfort.h"
@@ -144,6 +144,8 @@
 #include "../hardware/TTNMQTT.h"
 #include "../hardware/Buienradar.h"
 #include "../hardware/OctoPrintMQTT.h"
+#endif //FULL_HW_SUPPORTED
+#include "../hardware/XiaomiGateway.h"
 
 // load notifications configuration
 #include "../notifications/NotificationHelper.h"
@@ -770,6 +772,7 @@ bool MainWorker::AddHardwareFromParams(
 
 	switch (Type)
 	{
+  #ifdef FULL_HW_SUPPORTED
 	case HTYPE_RFXtrx315:
 	case HTYPE_RFXtrx433:
 	case HTYPE_RFXtrx868:
@@ -1136,14 +1139,7 @@ bool MainWorker::AddHardwareFromParams(
 	case HTYPE_Yeelight:
 		pHardware = new Yeelight(ID);
 		break;
-	case HTYPE_PythonPlugin:
-#ifdef ENABLE_PYTHON
-		pHardware = m_pluginsystem.RegisterPlugin(ID, Name, Extra);
-#endif
-		break;
-	case HTYPE_XiaomiGateway:
-		pHardware = new XiaoMi::XiaomiGateway(ID);
-		break;
+
 	case HTYPE_Arilux:
 		pHardware = new Arilux(ID);
 		break;
@@ -1182,6 +1178,15 @@ bool MainWorker::AddHardwareFromParams(
 		break;
 	case HTYPE_OctoPrint:
 		pHardware = new COctoPrintMQTT(ID, Address, Port, Username, Password, Extra);
+		break;
+  #endif //FULL_HW_SUPPORTED
+	case HTYPE_PythonPlugin:
+#ifdef ENABLE_PYTHON
+		pHardware = m_pluginsystem.RegisterPlugin(ID, Name, Extra);
+#endif
+		break;
+	case HTYPE_XiaomiGateway:
+		pHardware = new XiaoMi::XiaomiGateway(ID);
 		break;
 	}
 
@@ -1920,8 +1925,10 @@ void MainWorker::OnHardwareConnected(CDomoticzHardwareBase* pHardware)
 		pHardware->m_bEnableReceive = true;
 		return;
 	}
+  #ifdef FULL_HW_SUPPORTED
 	CRFXBase* pRFXBase = reinterpret_cast<CRFXBase*>(pHardware);
 	pRFXBase->SendResetCommand();
+  #endif
 }
 
 uint64_t MainWorker::PerformRealActionFromDomoticzClient(const uint8_t* pRXCommand, CDomoticzHardwareBase** pOriginalHardware)
@@ -2399,6 +2406,7 @@ void MainWorker::ProcessRXMessage(const CDomoticzHardwareBase* pHardware, const 
 		case pTypeSecurity2:
 			decode_Security2(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
+	  #ifdef FULL_HW_SUPPORTED
 		case pTypeEvohome:
 			decode_evohome1(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
@@ -2409,6 +2417,7 @@ void MainWorker::ProcessRXMessage(const CDomoticzHardwareBase* pHardware, const 
 		case pTypeEvohomeRelay:
 			decode_evohome3(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
+	  #endif //FULL_HW
 		case pTypeCamera:
 			decode_Camera1(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
@@ -2484,6 +2493,7 @@ void MainWorker::ProcessRXMessage(const CDomoticzHardwareBase* pHardware, const 
 		case pTypeWEIGHT:
 			decode_Weight(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
+	  #ifdef FULL_HW_SUPPORTED
 		case pTypeRFXSensor:
 			decode_RFXSensor(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
@@ -2514,6 +2524,7 @@ void MainWorker::ProcessRXMessage(const CDomoticzHardwareBase* pHardware, const 
 		case pTypeFS20:
 			decode_FS20(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
+	  #endif //FULL_HW_
 		case pTypeLux:
 			decode_Lux(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
@@ -2538,15 +2549,18 @@ void MainWorker::ProcessRXMessage(const CDomoticzHardwareBase* pHardware, const 
 		case pTypeHomeConfort:
 			decode_HomeConfort(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
+	  #ifdef FULL_HW_SUPPORTED
 		case pTypeCARTELECTRONIC:
 			decode_Cartelectronic(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
+	  #endif
 		case pTypeASYNCPORT:
 			decode_ASyncPort(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
 		case pTypeASYNCDATA:
 			decode_ASyncData(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
+	  #ifdef FULL_HW_SUPPORTED
 		case pTypeWEATHER:
 			decode_Weather(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
@@ -2556,6 +2570,7 @@ void MainWorker::ProcessRXMessage(const CDomoticzHardwareBase* pHardware, const 
 		case pTypeHunter:
 			decode_Hunter(pHardware, reinterpret_cast<const tRBUF*>(pRXCommand), procResult);
 			break;
+	  #endif //FULL_HW_SUPPORTED
 		default:
 			_log.Log(LOG_ERROR, "UNHANDLED PACKET TYPE:      FS20 %02X", pRXCommand[1]);
 			return;
@@ -2745,6 +2760,7 @@ void MainWorker::decode_InterfaceMessage(const CDomoticzHardwareBase* pHardware,
 				WriteMessage(szTmp);
 			}
 
+		  #ifdef  FULL_HW_SUPPORTED
 			CRFXBase* pMyHardware = (CRFXBase*)pHardware;
 			if (pMyHardware)
 			{
@@ -2761,7 +2777,7 @@ void MainWorker::decode_InterfaceMessage(const CDomoticzHardwareBase* pHardware,
 					pMyHardware->SetAsyncType(pMyHardware->m_AsyncType);
 				}
 			}
-
+		  #endif //FULL_HW_SUPPORTED
 
 			sprintf(szTmp, "Hardware version  = %d.%d", pResponse->IRESPONSE.msg7, pResponse->IRESPONSE.msg8);
 			WriteMessage(szTmp);
@@ -6751,6 +6767,7 @@ void MainWorker::decode_RFY(const CDomoticzHardwareBase* pHardware, const tRBUF*
 	procResult.DeviceRowIdx = DevRowIdx;
 }
 
+#ifdef FULL_HW_SUPPORTED
 void MainWorker::decode_evohome1(const CDomoticzHardwareBase* pHardware, const tRBUF* pResponse, _tRxMessageProcessingResult& procResult)
 {
 	char szTmp[100];
@@ -7082,6 +7099,7 @@ void MainWorker::decode_evohome3(const CDomoticzHardwareBase* pHardware, const t
 	CheckSceneCode(DevRowIdx, devType, subType, cmnd, "", procResult.DeviceName);
 	procResult.DeviceRowIdx = DevRowIdx;
 }
+#endif //FULL_HW_SUPPORTED
 
 void MainWorker::decode_Security1(const CDomoticzHardwareBase* pHardware, const tRBUF* pResponse, _tRxMessageProcessingResult& procResult)
 {
@@ -9879,6 +9897,7 @@ void MainWorker::decode_P1MeterGas(const CDomoticzHardwareBase* pHardware, const
 	procResult.DeviceRowIdx = DevRowIdx;
 }
 
+#ifdef FULL_HW_SUPPORTED
 void MainWorker::decode_YouLessMeter(const CDomoticzHardwareBase* pHardware, const tRBUF* pResponse, _tRxMessageProcessingResult& procResult)
 {
 	char szTmp[200];
@@ -9997,6 +10016,7 @@ void MainWorker::decode_Rego6XXValue(const CDomoticzHardwareBase* pHardware, con
 	}
 	procResult.DeviceRowIdx = DevRowIdx;
 }
+#endif //FULL_HW_SUPPORTED
 
 void MainWorker::decode_AirQuality(const CDomoticzHardwareBase* pHardware, const tRBUF* pResponse, _tRxMessageProcessingResult& procResult)
 {
@@ -10825,6 +10845,7 @@ void MainWorker::decode_ASyncPort(const CDomoticzHardwareBase* pHardware, const 
 
 void MainWorker::decode_ASyncData(const CDomoticzHardwareBase* pHardware, const tRBUF* pResponse, _tRxMessageProcessingResult& procResult)
 {
+  #ifdef FULL_HW_SUPPORTED
 	if (
 		(pHardware->m_HwdID == 999) ||
 		(pHardware->HwdType == HTYPE_RFXtrx315) ||
@@ -10838,6 +10859,7 @@ void MainWorker::decode_ASyncData(const CDomoticzHardwareBase* pHardware, const 
 		int Len = pResponse->ASYNCDATA.packetlength - 3;
 		pRFXBase->Parse_Async_Data(pData, Len);
 	}
+  #endif
 }
 
 void MainWorker::decode_CartelectronicTIC(const CDomoticzHardwareBase* pHardware, const tRBUF* pResponse, _tRxMessageProcessingResult& procResult)
@@ -11740,6 +11762,7 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string>& sd, std::string 
 			level = (level > 15) ? 15 : level;
 
 		lcmd.LIGHTING2.level = (uint8_t)level;
+	  #ifdef FULL_HW_SUPPORTED
 		//Special Teach-In for EnOcean Dimmers
 		if ((pHardware->HwdType == HTYPE_EnOceanESP2) && (IsTesting) && (switchtype == STYPE_Dimmer))
 		{
@@ -11752,6 +11775,7 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string>& sd, std::string 
 			pEnocean->SendDimmerTeachIn((const char*)&lcmd, sizeof(lcmd.LIGHTING1));
 		}
 		else
+	  #endif //FULL_HW_SUPPORTED
 		{
 			if (switchtype != STYPE_Motion) //dont send actual motion off command
 			{
@@ -12427,6 +12451,7 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string>& sd, std::string 
 		return true;
 	}
 	break;
+  #ifdef FULL_HW_SUPPORTED
 	case pTypeEvohomeRelay:
 	{
 		_tEVOHOME3 lcmd;
@@ -12450,6 +12475,7 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string>& sd, std::string 
 		return true;
 	}
 	break;
+  #endif //FULL_HW_SUPPORTED
 	case pTypeRadiator1:
 		tRBUF lcmd;
 		lcmd.RADIATOR1.packetlength = sizeof(lcmd.RADIATOR1) - 1;
@@ -12556,6 +12582,7 @@ bool MainWorker::SwitchModal(const std::string& idx, const std::string& status, 
 	std::vector<std::string> sd = result[0];
 
 	int nStatus = 0;
+  #ifdef FULL_HW_SUPPORTED
 	if (status == "Away")
 		nStatus = CEvohomeBase::cmEvoAway;
 	else if (status == "AutoWithEco")
@@ -12568,6 +12595,7 @@ bool MainWorker::SwitchModal(const std::string& idx, const std::string& status, 
 		nStatus = CEvohomeBase::cmEvoAuto;
 	else if (status == "HeatingOff")
 		nStatus = CEvohomeBase::cmEvoHeatingOff;
+  #endif //FULL_HW_SUPPORTED
 
 	int nValue = atoi(sd[7].c_str());
 	if (ooc == "1" && nValue == nStatus)
@@ -12602,6 +12630,8 @@ bool MainWorker::SwitchModal(const std::string& idx, const std::string& status, 
 	tsen.len = sizeof(_tEVOHOME1) - 1;
 	tsen.type = pTypeEvohome;
 	tsen.subtype = sTypeEvohome;
+
+  #ifdef FULL_HW_SUPPORTED
 	RFX_SETID3(ID, tsen.id1, tsen.id2, tsen.id3)
 		tsen.action = (action == "1") ? 1 : 0;
 	tsen.status = nStatus;
@@ -12609,6 +12639,8 @@ bool MainWorker::SwitchModal(const std::string& idx, const std::string& status, 
 	tsen.mode = until.empty() ? CEvohomeBase::cmPerm : CEvohomeBase::cmTmp;
 	if (tsen.mode == CEvohomeBase::cmTmp)
 		CEvohomeDateTime::DecodeISODate(tsen, until.c_str());
+
+  #endif //FULL_HW_SUPPORTED
 	WriteToHardware(HardwareID, (const char*)&tsen, sizeof(_tEVOHOME1));
 
 	//the latency on the scripted solution is quite bad so it's good to see the update happening...ideally this would go to an 'updating' status (also useful to update database if we ever use this as a pure virtual device)
@@ -12696,6 +12728,7 @@ bool MainWorker::SetSetPoint(const std::string& idx, const float TempValue, cons
 	if (pHardware->HwdType != HTYPE_EVOHOME_SCRIPT && pHardware->HwdType != HTYPE_EVOHOME_SERIAL && pHardware->HwdType != HTYPE_EVOHOME_WEB && pHardware->HwdType != HTYPE_EVOHOME_TCP)
 		return SetSetPointInt(sd, TempValue);
 
+  #ifdef FULL_HW_SUPPORTED
 	int nEvoMode = 0;
 	if (newMode == "PermanentOverride" || newMode.empty())
 		nEvoMode = CEvohomeBase::zmPerm;
@@ -12746,6 +12779,7 @@ bool MainWorker::SetSetPoint(const std::string& idx, const float TempValue, cons
 		//the latency on the scripted solution is quite bad so it's good to see the update happening...ideally this would go to an 'updating' status (also useful to update database if we ever use this as a pure virtual device)
 		PushAndWaitRxMessage(pHardware, (const uint8_t*)&tsen, NULL, -1);
 	}
+  #endif //FULL_HW_SUPPORTED
 	return true;
 }
 
@@ -12804,6 +12838,7 @@ bool MainWorker::SetSetPointInt(const std::vector<std::string>& sd, const float 
 		(pHardware->HwdType == HTYPE_OpenWebNetTCP)
 		)
 	{
+	  #ifdef FULL_HW_SUPPORTED
 		if (pHardware->HwdType == HTYPE_OpenThermGateway)
 		{
 			OTGWSerial* pGateway = reinterpret_cast<OTGWSerial*>(pHardware);
@@ -12878,6 +12913,7 @@ bool MainWorker::SetSetPointInt(const std::vector<std::string>& sd, const float 
 			COpenWebNetTCP* pGateway = reinterpret_cast<COpenWebNetTCP*>(pHardware);
 			return pGateway->SetSetpoint(ID, TempValue);
 		}
+	  #endif //FULL_HW_SUPPORTED
 	}
 	else
 	{
@@ -13102,6 +13138,8 @@ bool MainWorker::SetThermostatState(const std::string& idx, const int newState)
 	CDomoticzHardwareBase* pHardware = GetHardware(HardwareID);
 	if (pHardware == NULL)
 		return false;
+
+  #ifdef FULL_HW_SUPPORTED
 	if (pHardware->HwdType == HTYPE_TOONTHERMOSTAT)
 	{
 		CToonThermostat* pGateway = reinterpret_cast<CToonThermostat*>(pHardware);
@@ -13151,6 +13189,7 @@ bool MainWorker::SetThermostatState(const std::string& idx, const int newState)
 		pGateway->SetProgramState(newState);
 		return true;
 	}
+  #endif //FULL_HW_SUPPORTED
 	return false;
 }
 
@@ -13924,6 +13963,7 @@ bool MainWorker::UpdateDevice(const int HardwareID, const std::string& DeviceID,
 
 	if (pHardware)
 	{
+		#ifdef FULL_HW_SUPPORTED
 		if (
 			(pHardware->HwdType == HTYPE_MySensorsUSB) ||
 			(pHardware->HwdType == HTYPE_MySensorsTCP) ||
@@ -13940,6 +13980,7 @@ bool MainWorker::UpdateDevice(const int HardwareID, const std::string& DeviceID,
 			MySensorsBase* pMySensorDevice = reinterpret_cast<MySensorsBase*>(pHardware);
 			pMySensorDevice->SendTextSensorValue(NodeID, ChildID, sValue);
 		}
+		#endif //FULL_HW_SUPPORTED
 	}
 
 	//Calculate temperature trend

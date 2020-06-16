@@ -437,7 +437,7 @@ namespace http {
 	namespace server {
 		void CWebServer::Cmd_PingerGetNodes(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -477,7 +477,7 @@ namespace http {
 
 		void CWebServer::Cmd_PingerSetMode(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -517,7 +517,7 @@ namespace http {
 
 		void CWebServer::Cmd_PingerAddNode(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -549,7 +549,7 @@ namespace http {
 
 		void CWebServer::Cmd_PingerUpdateNode(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -584,7 +584,7 @@ namespace http {
 
 		void CWebServer::Cmd_PingerRemoveNode(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -613,7 +613,7 @@ namespace http {
 
 		void CWebServer::Cmd_PingerClearNodes(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed

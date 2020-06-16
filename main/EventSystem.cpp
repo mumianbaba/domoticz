@@ -8,9 +8,12 @@
 #include "SQLHelper.h"
 #include "Logger.h"
 #include "../hardware/hardwaretypes.h"
+#ifdef FULL_HW_SUPPORTED
 #include "../hardware/Kodi.h"
 #include "../hardware/LogitechMediaServer.h"
 #include "../hardware/MySensorsBase.h"
+#include "../main/NotificationSystem.h"
+#endif 
 #include <iostream>
 #include "../httpclient/UrlEncode.h"
 #include "localtime_r.h"
@@ -20,7 +23,7 @@
 #include "../main/WebServerHelper.h"
 #include "../webserver/cWebem.h"
 #include "../main/json_helper.h"
-#include "../main/NotificationSystem.h"
+//#include "../main/NotificationSystem.h"
 #include "../main/LuaTable.h"
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -1662,7 +1665,9 @@ void CEventSystem::EvaluateEvent(const std::vector<_tEventQueue> &items)
 				}
 				else if ((itt->reason == REASON_TIME && filename.find("_time_") != std::string::npos) ||
 					(itt->reason == REASON_SECURITY && filename.find("_security_") != std::string::npos) ||
+			#ifdef FULL_HW_SUPPORTED
 					(itt->reason == REASON_NOTIFICATION && filename.find("_notification_") != std::string::npos) ||
+			#endif
 					(itt->reason == REASON_USERVARIABLE && filename.find("_variable_") != std::string::npos))
 				{
 					EvaluateLua(*itt, m_lua_Dir + filename, "");
@@ -3659,6 +3664,7 @@ bool CEventSystem::ScheduleEvent(int deviceID, const std::string &Action, bool i
 		level = calculateDimLevel(deviceID, atoi(oParseResults.sCommand.substr(10).c_str()));
 		oParseResults.sCommand = oParseResults.sCommand.substr(0, 9);
 	}
+  #ifdef FULL_HW_SUPPORTED
 	else if (oParseResults.sCommand.substr(0, 10) == "Set Volume") {
 		level = atoi(oParseResults.sCommand.substr(11).c_str());
 		oParseResults.sCommand = oParseResults.sCommand.substr(0, 10);
@@ -3719,6 +3725,7 @@ bool CEventSystem::ScheduleEvent(int deviceID, const std::string &Action, bool i
 			pHardware->SetExecuteCommand(deviceID, sParams);
 		}
 	}
+  #endif //FULL_HW
 
 	if (previousState.substr(0, 9) == "Set Level" || previousState.substr(0, 5) == "Level") {
 		previousState = "Set Level";
@@ -4139,7 +4146,7 @@ namespace http {
 			root["status"] = "ERR";
 
 			redirect_uri = root.toStyledString();
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed

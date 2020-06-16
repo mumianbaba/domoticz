@@ -10,6 +10,7 @@
 #include <memory>
 #include <iostream>
 #include <string>
+#include <functional>
 
 #include "Xiaomi/DevAttr.hpp"
 #include "Xiaomi/Device.hpp"
@@ -20,7 +21,9 @@ namespace XiaoMi{
 
 typedef std::map <std::string, DevAttr*> AttrMap;
 typedef std::map <std::string, std::shared_ptr<Device>> DeviceMap;
+typedef std::function< void() > AsyncTaskFunc;
 
+typedef std::function< bool(Json::Value& ) > CheckFunc;
 
 
 
@@ -38,12 +41,14 @@ public:
 	bool StartHardware() override;
 	bool StopHardware() override;
 	void Do_Work();
-	static void whois(void);
+	void getPortConfig(const std::string& path);
+	void getManualConfig(const std::string& path);
+	static void asyncTask(void);
+
 
 public:
 	static void initDeviceAttrMap(const DevInfo devInfo[], int size);
 	static const DevAttr* findDevAttr(const std::string& model);
-	static bool checkZigbeeMac(const std::string& mac);
 	void addDeviceToMap(const std::string& mac, std::shared_ptr<Device> ptr);
 	void delDeviceFromMap(const std::string& mac);
 	void clearDeviceFromMap();
@@ -82,10 +87,14 @@ public:
 	void updateTempHum(const std::string &nodeId, const std::string &name, const std::string& temperature, const std::string&	humidity, const int battery);
 	void updateKwh(const std::string & nodeId, const std::string & name, const std::string& loadPower, const std::string& consumed, const int battery);
 public:
-	bool paramCheckSid(const Json::Value& json);
-	bool paramCheckModel(const Json::Value& json);
-	void sendUnsupportDevCmd(const std::string& sid, const std::string& model);
+	void addAsyncTask(AsyncTaskFunc task);
+	std::vector<AsyncTaskFunc> getAsyncTaskList();
+	AsyncTaskFunc popAsyncTask();
+	void clearAsyncTask();
+
+	void sendUnsupportDevCmd(const std::string& sid);
 	void sendReadCmd(const std::string& sid);
+	void sendWhoisCmd();
 
 
 public:
@@ -102,8 +111,7 @@ public:
 
 	static std::list<XiaomiGateway*> m_gwList;
 	static std::mutex m_gwListMutex;
-	static std::shared_ptr<boost::thread> m_whoIsThread;
-
+	static std::shared_ptr<boost::thread> m_asyncThread;
 
 private:
 
@@ -111,11 +119,15 @@ private:
 	std::string m_gwSid;
 	std::string m_gwModel;
 	std::string m_gwIp;
+	std::string m_mutilAddr;
 	int m_gwUnicastPort;
+	int m_findServicePort;
+	int m_udpServicePort;
 	std::string m_localIp;
 	std::string m_gwPassword;
 	std::shared_ptr<std::thread> m_thread;
 	std::mutex m_mutex;
+	std::vector<AsyncTaskFunc> m_taskList;
 
 	bool m_devInfoInited;
 	DeviceMap m_deviceMap;
@@ -126,7 +138,7 @@ private:
 class UdpServer
 {
 public:
-	UdpServer(const std::string &localIp);
+	UdpServer(const std::string &localIp, const std::string &mutilAddr, int port);
 	~UdpServer();
 
 public:
@@ -160,6 +172,8 @@ private:
 	char data_[max_length];
 	std::string m_gwIp;
 	std::string m_localIp;
+	std::string m_mutilAddr;
+	int m_port;
 	boost::thread  m_serThread;
 
 public:

@@ -2382,7 +2382,7 @@ namespace http {
 	namespace server {
 		void CWebServer::Cmd_MySensorsGetNodes(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -2456,7 +2456,7 @@ namespace http {
 		}
 		void CWebServer::Cmd_MySensorsGetChilds(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -2536,7 +2536,7 @@ namespace http {
 		}
 		void CWebServer::Cmd_MySensorsUpdateNode(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -2569,7 +2569,7 @@ namespace http {
 		}
 		void CWebServer::Cmd_MySensorsRemoveNode(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -2600,7 +2600,7 @@ namespace http {
 		}
 		void CWebServer::Cmd_MySensorsRemoveChild(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -2634,7 +2634,7 @@ namespace http {
 		}
 		void CWebServer::Cmd_MySensorsUpdateChild(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed

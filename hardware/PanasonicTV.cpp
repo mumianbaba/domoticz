@@ -1049,7 +1049,7 @@ namespace http {
 	namespace server {
 		void CWebServer::Cmd_PanasonicGetNodes(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -1089,7 +1089,7 @@ namespace http {
 
 		void CWebServer::Cmd_PanasonicSetMode(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -1125,7 +1125,7 @@ namespace http {
 
 		void CWebServer::Cmd_PanasonicAddNode(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -1157,7 +1157,7 @@ namespace http {
 
 		void CWebServer::Cmd_PanasonicUpdateNode(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -1192,7 +1192,7 @@ namespace http {
 
 		void CWebServer::Cmd_PanasonicRemoveNode(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -1221,7 +1221,7 @@ namespace http {
 
 		void CWebServer::Cmd_PanasonicClearNodes(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed

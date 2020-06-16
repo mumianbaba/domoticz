@@ -220,7 +220,7 @@ namespace http {
 	namespace server {
 		void CWebServer::Cmd_SaveInfluxLinkConfig(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -259,7 +259,7 @@ namespace http {
 
 		void CWebServer::Cmd_GetInfluxLinkConfig(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -308,7 +308,7 @@ namespace http {
 
 		void CWebServer::Cmd_GetInfluxLinks(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -341,7 +341,7 @@ namespace http {
 
 		void CWebServer::Cmd_SaveInfluxLink(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
@@ -383,7 +383,7 @@ namespace http {
 
 		void CWebServer::Cmd_DeleteInfluxLink(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2)
+			if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed

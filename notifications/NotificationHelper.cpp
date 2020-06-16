@@ -39,19 +39,21 @@ CNotificationHelper::CNotificationHelper()
 	m_NotificationSensorInterval = 12 * 3600;
 
 	/* more notifiers can be added here */
-
-	AddNotifier(new CNotificationProwl());
-	AddNotifier(new CNotificationPushbullet());
-	AddNotifier(new CNotificationTelegram());
-	AddNotifier(new CNotificationPushover());
-	AddNotifier(new CNotificationPushsafer());
-	AddNotifier(new CNotificationPushalot());
+  #ifdef FULL_HW_SUPPORTED
 	AddNotifier(new CNotificationEmail());
 	AddNotifier(new CNotificationSMS());
 	AddNotifier(new CNotificationHTTP());
 	AddNotifier(new CNotificationKodi());
 	AddNotifier(new CNotificationLogitechMediaServer());
 	AddNotifier(new CNotificationGCM());
+	AddNotifier(new CNotificationTelegram());
+  #endif
+
+	AddNotifier(new CNotificationProwl());
+	AddNotifier(new CNotificationPushbullet());
+	AddNotifier(new CNotificationPushover());
+	AddNotifier(new CNotificationPushsafer());
+	AddNotifier(new CNotificationPushalot());
 	AddNotifier(new CNotificationBrowser());
 }
 

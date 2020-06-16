@@ -2100,7 +2100,7 @@ namespace http {
 			if (isAction)
 			{
 				// Post actions only allowed when authenticated and user has admin rights
-				if (session.rights != 2)
+				if (session.rights != URIGHTS_ADMIN)
 				{
 					rep = reply::stock_reply(reply::forbidden);
 					return;

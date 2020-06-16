@@ -67,6 +67,7 @@ const char* repReport = "report";
 const char* repHBeat = "heartbeat";
 const char* repNewDevList = "new_dev_list";
 
+
 }
 
 
@@ -79,14 +80,41 @@ std::mutex XiaomiGateway::m_gwListMutex;
 
 /* support device list and online device list */
 AttrMap XiaomiGateway::m_attrMap;
-std::shared_ptr<boost::thread> XiaomiGateway::m_whoIsThread;
+std::shared_ptr<boost::thread> XiaomiGateway::m_asyncThread;
 
+
+/* udp server */
 UdpServer* UdpServer::m_updServer = nullptr;
 std::mutex UdpServer::m_mutex;
 volatile bool UdpServer::m_isRun = false;
 
 
-bool XiaomiGateway::checkZigbeeMac(const std::string& mac)
+
+static bool checkZigbeeMac(const std::string& mac);
+static bool paramCheckCmd(const Json::Value& json);
+static bool paramCheckSid(const Json::Value& json);
+static bool paramCheckModel(const Json::Value& json);
+static bool paramCheckIp(const Json::Value& json);
+static bool paramCheckPort(const Json::Value& json);
+static bool paramCheckToken(const Json::Value& json);
+
+static bool paramCheckProtocol(const Json::Value& json);
+static bool paramCheckParams(const Json::Value& json);
+static bool paramCheckDevList(const Json::Value& json);
+
+
+std::map<std::string, std::vector<CheckFunc>> sCheckMsgRule = {
+	{rspWhoIs, {paramCheckCmd, paramCheckModel, paramCheckProtocol, paramCheckIp, paramCheckPort}},
+	{rspDiscorey, {paramCheckCmd, paramCheckSid, paramCheckToken, paramCheckDevList}},
+	{repNewDevList, {paramCheckCmd, paramCheckSid, paramCheckToken,paramCheckDevList}},
+	{rspRead, {paramCheckCmd, paramCheckModel, paramCheckSid, paramCheckParams}},
+	{rspWrite, {paramCheckCmd, paramCheckModel, paramCheckSid, paramCheckParams}},
+	{repReport, {paramCheckCmd, paramCheckModel, paramCheckSid, paramCheckParams}},
+	{repHBeat, {paramCheckCmd, paramCheckModel, paramCheckSid, paramCheckToken, paramCheckParams}},
+	};
+
+
+static bool checkZigbeeMac(const std::string& mac)
 {
 	if (mac.size() != 16  && mac.size() != 8){
 		_log.Log(LOG_ERROR, "zigbee mac size not equal 16");
@@ -105,6 +133,235 @@ bool XiaomiGateway::checkZigbeeMac(const std::string& mac)
 	return (ii == mac.size());
 }
 
+static bool paramCheckCmd(const Json::Value& json)
+{
+	if (false == json.isMember(keyCmd)){
+		_log.Log(LOG_ERROR,  "cmd is absent at the json");
+		return false;
+	}
+
+	if (false == json[keyCmd].isString()){
+		_log.Log(LOG_ERROR,  "sid is not a string at the json");
+		return false;
+	}
+
+	std::string cmd = json[keyCmd].asString();
+	if (cmd != rspRead && cmd != rspDiscorey &&
+		cmd != rspWhoIs && cmd != rspWrite &&
+		cmd != repHBeat && cmd != repReport &&
+		cmd != repNewDevList){
+		_log.Log(LOG_ERROR,  "cmd not find");
+		return false;
+	}
+	return true;
+}
+
+
+static bool paramCheckSid(const Json::Value& json)
+{
+	if (false == json.isMember(keySid)){
+		_log.Log(LOG_ERROR,  "sid is absent at the json");
+		return false;
+	}
+
+	if (false == json[keySid].isString()){
+		_log.Log(LOG_ERROR,  "sid is not a string at the json");
+		return false;
+	}
+
+	std::string sid = json[keySid].asString();
+	if (!checkZigbeeMac(sid)){
+		_log.Log(LOG_ERROR,  "sid format check error at the json");
+		return false;
+	}
+	return true;
+}
+
+static bool paramCheckModel(const Json::Value& json)
+{
+	if (false == json.isMember(keyModel)){
+		_log.Log(LOG_ERROR,  "model is absent at the json");
+		return false;
+	}
+	if (false == json[keyModel].isString()){
+		_log.Log(LOG_ERROR,  "model is not a string at the json");
+		return false;
+	}
+	std::string model = json[keyModel].asString();
+	if (model.empty()){
+		_log.Log(LOG_ERROR,  "model is not a string at the json");
+		return false;
+	}
+	return true;
+}
+
+static bool paramCheckIp(const Json::Value& json)
+{
+	if (false == json.isMember(keyIp)){
+		_log.Log(LOG_ERROR,  "ip is absent at the json");
+		return false;
+	}
+
+	if (false == json[keyIp].isString()){
+		_log.Log(LOG_ERROR,  "ip is not a string at the json");
+		return false;
+	}
+
+	std::string ip = json[keyIp].asString();
+	if (ip.empty()){
+		_log.Log(LOG_ERROR,  "ip format check error at the json");
+		return false;
+	}
+
+	struct sockaddr_in addr;
+	int ret = ::inet_pton(AF_INET, ip.c_str(), (void*)&addr.sin_addr.s_addr);
+	if (ret != 1){
+		_log.Log(LOG_ERROR, "ip convert error");
+		return false;
+	}
+
+	return true;
+}
+
+
+static bool paramCheckPort(const Json::Value& json)
+{
+	if (false == json.isMember(keyPort)){
+		_log.Log(LOG_ERROR,  "port is absent at the json");
+		return false;
+	}
+
+	if (false == json[keyPort].isString()){
+		_log.Log(LOG_ERROR,  "port is not a string at the json");
+		return false;
+	}
+
+	std::string port = json[keyPort].asString();
+	if (port.empty()){
+		_log.Log(LOG_ERROR,  "port format check error at the json");
+		return false;
+	}
+
+	try{
+		int ret = std::stoi(port);
+		if (ret < 1024 || ret > 65535){
+			throw std::range_error("port outof range");
+		}
+	}
+
+	catch(std::exception & e)
+	{
+		_log.Log(LOG_ERROR, "ParamCheck: Receive the message port(%s) error: %s", port.c_str(),  e.what());
+		return false;
+	}
+	return true;
+}
+
+static bool paramCheckProtocol(const Json::Value& json)
+{
+	if (false == json.isMember(keyProtocol)){
+		_log.Log(LOG_ERROR,  "Protocol is absent at the json");
+		return false;
+	}
+	if (false == json[keyProtocol].isString()){
+		_log.Log(LOG_ERROR,  "Protocol is not a string at the json");
+		return false;
+	}
+	std::string protocol = json[keyProtocol].asString();
+	if (protocol != "UDP"){
+		_log.Log(LOG_ERROR,  "Protocol is not UDP at the json");
+		return false;
+	}
+	return true;
+}
+
+static bool paramCheckToken(const Json::Value& json)
+{
+	if (false == json.isMember(keyToken)){
+		_log.Log(LOG_ERROR,  "token is absent at the json");
+		return false;
+	}
+	if (false == json[keyToken].isString()){
+		_log.Log(LOG_ERROR,  "token is not string at the json");
+		return false;
+	}
+	std::string token = json[keyToken].asString();
+	if (token.empty())
+	{
+		_log.Log(LOG_ERROR,  "token empty at the json");
+		return false;
+	}
+	return true;
+}
+
+static bool paramCheckParams(const Json::Value& json)
+{
+	if (false == json.isMember(keyParams)){
+		_log.Log(LOG_ERROR,  "Params is absent at the json");
+		return false;
+	}
+	if (false == json[keyParams].isArray()){
+		_log.Log(LOG_ERROR,  "Params is not a array at the json");
+		return false;
+	}
+	return true;
+}
+
+
+static bool paramCheckDevList(const Json::Value& json)
+{
+	if (false == json.isMember(keyDevList)){
+		_log.Log(LOG_ERROR,  "device list is absent at the json");
+		return false;
+	}
+	// when array size equal 0 , zgbd gave {} not []
+/*
+	if (false == json[keyDevList].isArray()){
+		_log.Log(LOG_ERROR,  "Params is not a array at the json");
+		return false;
+	}
+*/
+	return true;
+}
+static std::string readFile(const std::string& path)
+{
+	std::ifstream file;
+	char* buffer = nullptr;
+	try{
+		file.open(path, std::ifstream::in);
+		if(!file.good()){
+			_log.Log(LOG_ERROR, "%s open failed", path.c_str());
+			return "";
+		}
+		file.seekg(0, file.end);
+		int len = file.tellg();
+		file.seekg(0, file.beg);
+
+		buffer = new char [len+4];
+		if (nullptr == buffer){
+			_log.Log(LOG_ERROR, "new a buffer failed, len:%d", len);
+			file.close();
+			return "";
+		}
+		memset(buffer, 0, len+4);
+
+		file.read (buffer,len);
+		file.close();
+	}
+
+	catch(const std::exception & e){
+		_log.Log(LOG_ERROR, "An error when read the /etc/modport.json file, %s", e.what());
+	}
+
+
+	std::ostringstream oString(buffer);
+	delete[] buffer;
+	buffer = nullptr;
+
+	std::string row = oString.str();
+	return row;
+}
+
 
 XiaomiGateway::XiaomiGateway(const int ID)
 {
@@ -116,17 +373,23 @@ XiaomiGateway::XiaomiGateway(const int ID)
 	if (m_attrMap.empty()){
 		initDeviceAttrMap(devInfoTab, sizeof(devInfoTab)/sizeof(devInfoTab[0]));
 	}
+	m_mutilAddr = "224.0.0.50";
+	m_findServicePort = 4321;
+	m_udpServicePort = 9898;
+	getPortConfig("/etc/modport.json");
+	getManualConfig("/etc/config/domoticz/config.json");
 }
 
 XiaomiGateway::~XiaomiGateway(void)
 {
-	_log.Log(LOG_STATUS, "~XiaomiGateway");
+	_log.Log(LOG_STATUS, "~XiaomiGateway start");
 
 	int gwNum = gatewayListSize();
 
 	std::unique_lock<std::mutex> lock(UdpServer::m_mutex);
 	auto server = UdpServer::getUdpServer();
 
+	/* mutil gateway will segment fault at hanler recv */
 	if (gwNum == 0 && server != nullptr){
 		UdpServer::resetUdpServer();
 		server->stop();
@@ -134,12 +397,13 @@ XiaomiGateway::~XiaomiGateway(void)
 		_log.Log(LOG_STATUS, "udp service is stop");
 	}
 
-	if (gwNum == 0 && m_whoIsThread){
-		m_whoIsThread->interrupt();
-		m_whoIsThread->join();
-		m_whoIsThread.reset();
-		_log.Log(LOG_STATUS, "whois service is stop");
+	if (gwNum == 0 && m_asyncThread){
+		m_asyncThread->interrupt();
+		m_asyncThread->join();
+		m_asyncThread.reset();
+		_log.Log(LOG_STATUS, "asyncTask service is stop");
 	}
+	_log.Log(LOG_STATUS, "~XiaomiGateway end");
 }
 
 bool XiaomiGateway::StartHardware()
@@ -220,6 +484,60 @@ bool XiaomiGateway::StopHardware()
 	_log.Log(LOG_STATUS, "stop the XiaomiGateway Hardware");
 	return true;
 }
+
+void XiaomiGateway::getPortConfig(const std::string& path)
+{
+	Json::Value root;
+	std::string row = readFile(path);
+	if(row.empty()){
+		return;
+	}
+	bool res = ParseJSon(row, root);
+	if (res == false){
+		_log.Log(LOG_ERROR, "json parse failed");
+		return;
+	}
+	if (root.isMember("zgbd-mul-udp")){
+		m_findServicePort = root["zgbd-mul-udp"].asInt();
+	}
+	else{
+		_log.Log(LOG_ERROR, "no find zgbd-mul-udp at /etc/modport.json");
+	}
+
+	if (root.isMember("dt-udp")){
+		m_udpServicePort = root["dt-udp"].asInt();
+	}
+	else{
+		_log.Log(LOG_ERROR, "no find dt-udp at /etc/modport.json");
+	}
+	
+	_log.Log(LOG_STATUS, "get the mutilcast whois port:%d  udp service port:%d", m_findServicePort, m_udpServicePort);
+	return;
+}
+
+void XiaomiGateway::getManualConfig(const std::string& path)
+{
+	Json::Value root;
+	std::string row = readFile(path);
+	if(row.empty()){
+		return;
+	}
+	bool res = ParseJSon(row, root);
+	if (res == false){
+		_log.Log(LOG_ERROR, "json parse failed");
+		return;
+	}
+	if (root.isMember("mutil_addr")){
+		m_mutilAddr = root["mutil_addr"].asString();
+	}
+	else{
+		_log.Log(LOG_ERROR, "no find mutil_addr at %s", path.c_str());
+	}
+	return;
+}
+
+
+
 
 
 int XiaomiGateway::getLocalIpAddr(std::vector<std::string>& ipAddrs)
@@ -317,29 +635,28 @@ void XiaomiGateway::Do_Work()
 		std::unique_lock<std::mutex> lock(UdpServer::m_mutex);
 		if (!UdpServer::m_isRun)
 		{
-			UdpServer* server = new UdpServer (m_localIp);
+			UdpServer* server = new UdpServer (m_localIp, m_mutilAddr, m_udpServicePort);
 			if (nullptr == server){
-				StopHardware();
-				_log.Log(LOG_ERROR, "init upd server failed");
+				_log.Log(LOG_ERROR, "fatal error: init upd server failed");
 				return;
 			}
 			bool res = server->run();
 			if (false == res){
-				StopHardware();
-				_log.Log(LOG_ERROR, "init upd server failed");
+				delete server;
+				server = NULL;
+				_log.Log(LOG_ERROR, "fatal error: run upd server failed");
 				return;
 			}
 			UdpServer::setUdpServer(server);
 			UdpServer::m_isRun = true;
 			_log.Log(LOG_STATUS, "XiaomiGateway: udp server is start...");
 		}
+		sendWhoisCmd();
 
-		sendMessageToGateway("{\"cmd\":\"whois\"}", "224.0.0.50", 4321);
+		if (!m_asyncThread){
 
-		if (!m_whoIsThread){
-
-			m_whoIsThread = std::make_shared<boost::thread>(XiaomiGateway::whois);
-			SetThreadName(m_whoIsThread->native_handle(), "XiaomiGwWhois");
+			m_asyncThread = std::make_shared<boost::thread>(XiaomiGateway::asyncTask);
+			SetThreadName(m_asyncThread->native_handle(), "XiaomiAsyncTask");
 		}
 	}
 	_log.Log(LOG_STATUS, "XiaomiGateway (ID=%d): Worker started...", m_HwdID);
@@ -732,40 +1049,39 @@ void XiaomiGateway::updateHardwareInfo(const std::string& model, const std::stri
 }
 
 
-bool XiaomiGateway::paramCheckSid(const Json::Value& json)
+void XiaomiGateway::addAsyncTask(AsyncTaskFunc task)
 {
-	if (false == json.isMember(keySid)){
-		_log.Log(LOG_ERROR,  "sid is absent at the json");
-		return false;
-	}
-
-	if (false == json[keySid].isString()){
-		_log.Log(LOG_ERROR,  "sid is not a string at the json");
-		return false;
-	}
-
-	std::string sid = json[keySid].asString();
-	if (!checkZigbeeMac(sid)){
-		_log.Log(LOG_ERROR,  "sid format check error at the json");
-		return false;
-	}
-	return true;
+	std::unique_lock<std::mutex> lock(m_mutex);
+	m_taskList.emplace_back(task);
 }
 
-bool XiaomiGateway::paramCheckModel(const Json::Value& json)
+
+std::vector<AsyncTaskFunc> XiaomiGateway::getAsyncTaskList()
 {
-	if (false == json.isMember(keyModel)){
-		_log.Log(LOG_ERROR,  "sid is absent at the json");
-		return false;
-	}
-	if (false == json[keyModel].isString()){
-		_log.Log(LOG_ERROR,  "sid is not a string at the json");
-		return false;
-	}
-	return true;
+	std::unique_lock<std::mutex> lock(m_mutex);
+	return m_taskList;
 }
 
-void XiaomiGateway::sendUnsupportDevCmd(const std::string& sid, const std::string& model)
+AsyncTaskFunc XiaomiGateway::popAsyncTask()
+{
+	AsyncTaskFunc res;
+	std::unique_lock<std::mutex> lock(m_mutex);
+	if (m_taskList.empty()){
+		return res;
+	}
+
+	res = m_taskList.back();
+	m_taskList.pop_back();
+	return res;
+}
+
+void XiaomiGateway::clearAsyncTask()
+{
+	std::unique_lock<std::mutex> lock(m_mutex);
+	m_taskList.clear();
+}
+
+void XiaomiGateway::sendUnsupportDevCmd(const std::string& sid)
 {
 	Json::Value delCmd;
 	delCmd[keyCmd] = "write";
@@ -774,8 +1090,6 @@ void XiaomiGateway::sendUnsupportDevCmd(const std::string& sid, const std::strin
 	delCmd[keyParams][0]["unsupported_device"] = sid;
 	std::string message = JSonToRawString (delCmd);
 	sendMessageToGateway(message);
-	_log.Log(LOG_ERROR, "XiaomiGateway: not support the device"
-						" model:%s	mac:%s", sid.c_str(), model.c_str());
 }
 
 void XiaomiGateway::sendReadCmd(const std::string& sid)
@@ -786,6 +1100,14 @@ void XiaomiGateway::sendReadCmd(const std::string& sid)
 	std::string message = JSonToRawString (readCmd);
 	sendMessageToGateway(message);
 }
+
+
+void XiaomiGateway::sendWhoisCmd()
+{
+	const std::string& whoisCmd = "{\"cmd\":\"whois\"}";
+	sendMessageToGateway(whoisCmd, m_mutilAddr, m_findServicePort);
+}
+
 void XiaomiGateway::deviceListHandler(const Json::Value& root)
 {
 	std::string gwSid;
@@ -818,7 +1140,8 @@ void XiaomiGateway::deviceListHandler(const Json::Value& root)
 	Json::Value list = root[keyDevList];
 	for (int ii = 0; ii < (int)list.size(); ii++){
 
-		if (false == paramCheckSid(list[ii]) ||
+		if (
+			false == paramCheckSid(list[ii]) ||
 			false == paramCheckModel(list[ii])){
 			continue;
 		}
@@ -828,9 +1151,13 @@ void XiaomiGateway::deviceListHandler(const Json::Value& root)
 
 		const DevAttr* attr = XiaomiGateway::findDevAttr(model);
 		if(nullptr == attr){
-			sendUnsupportDevCmd(sid, model);
+			addAsyncTask(std::bind(&XiaomiGateway::sendUnsupportDevCmd, this, sid));
+			_log.Log(LOG_ERROR, "XiaomiGateway: not support the device"
+					" model:%s	mac:%s", sid.c_str(), model.c_str());
 			continue;
 		}
+
+		std::string cmd = root[keyCmd].asString();
 
 		/* if device not exist */
 		if (!getDevice(sid)){
@@ -846,9 +1173,11 @@ void XiaomiGateway::deviceListHandler(const Json::Value& root)
 				continue;
 			}
 			XiaomiGateway::addDeviceToMap(sid, dev);
+			if (cmd == repNewDevList){
+				addAsyncTask(std::bind(&XiaomiGateway::sendReadCmd, this, sid));
+			}
 		}
 
-		std::string cmd = root[keyCmd].asString();
 		if(cmd == repNewDevList){
 			auto dev = getDevice(sid);
 			if (!dev)
@@ -860,7 +1189,7 @@ void XiaomiGateway::deviceListHandler(const Json::Value& root)
 		}
 		else if (cmd == rspDiscorey)
 		{
-			sendReadCmd(sid);
+			addAsyncTask(std::bind(&XiaomiGateway::sendReadCmd, this, sid));
 		}
 	}
 
@@ -950,22 +1279,42 @@ OnlineStatus XiaomiGateway::getOnlineStatus(std::shared_ptr<Device>& dev)
 	return sta;
 }
 
-void XiaomiGateway::whois(void)
+void XiaomiGateway::asyncTask(void)
 {
-	_log.Log(LOG_STATUS, "XiaomiGateway:whois thread is running");
-	const std::string& msg = "{\"cmd\":\"whois\"}";
+	_log.Log(LOG_STATUS, "XiaomiGateway:asyncTask thread is running");
+	unsigned count = 0;
 	while (1)
 	{
-		boost::this_thread::sleep(boost::posix_time::seconds(10));
-		XiaomiGateway* firstGw = NULL;
+		boost::this_thread::sleep(boost::posix_time::seconds(4));
+		count++;
+
+		std::list<XiaomiGateway*> gwList;
 		{
 			std::unique_lock<std::mutex> lock(m_gwListMutex);
-			auto it = m_gwList.begin();
+			gwList = m_gwList;
+		}
+
+		/* whois task*/
+		if ((count % 3) == 0){
+			XiaomiGateway* firstGw = NULL;
+			auto it = gwList.begin();
 			firstGw = *it;
-			if (firstGw && !firstGw->isDevInfoInited())
+			if (firstGw && !firstGw->isDevInfoInited()){
+				firstGw->sendWhoisCmd();
+				_log.Log(LOG_ERROR, "send whois to udp group");
+			}
+		}
+
+		/* read task */
+		for (const auto& itt : gwList){
+			if (nullptr == itt){
+				continue;
+			}
+
+			auto task = itt->popAsyncTask();
+			if (task != nullptr)
 			{
-				firstGw->sendMessageToGateway(msg, "224.0.0.50", 4321);
-				_log.Log(LOG_ERROR, "send whois to udp group port 4321");
+				task();
 			}
 		}
 	}
@@ -1432,36 +1781,13 @@ void XiaomiGateway::updateKwh(const std::string & nodeID, const std::string & na
 }
 
 
-UdpServer::UdpServer(const std::string &localIp)
+UdpServer::UdpServer(const std::string &localIp, const std::string& mutilAddr, int port)
 	: m_socket(m_ioService, boost::asio::ip::udp::v4())
 {
 	_log.Log(LOG_STATUS, "UdpServer use localIp:%s", localIp.c_str());
 	m_localIp = localIp;
-	try {
-		m_socket.set_option(boost::asio::ip::udp::socket::reuse_address(true));
-		_log.Log(LOG_ERROR, "XiaomiGateway: UdpServer m_localip： %s", UdpServer::m_localIp.c_str());
-
-		if (UdpServer::m_localIp != "") {
-			boost::system::error_code ec;
-			boost::asio::ip::address listenAddr = boost::asio::ip::address::from_string(UdpServer::m_localIp, ec);
-			boost::asio::ip::address mcastAddr = boost::asio::ip::address::from_string("224.0.0.50", ec);
-			boost::asio::ip::udp::endpoint listenEndpoint(mcastAddr, 9898);
-
-			m_socket.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 9898));
-			m_socket.set_option(boost::asio::ip::multicast::join_group(mcastAddr.to_v4(), listenAddr.to_v4()), ec);
-			m_socket.bind(listenEndpoint, ec);
-		}
-		else {
-			m_socket.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 9898));
-			m_socket.set_option(boost::asio::ip::multicast::join_group(boost::asio::ip::address::from_string("224.0.0.50")));
-		}
-	}
-	catch (const boost::system::system_error& ex) {
-
-		_log.Log(LOG_ERROR, "XiaomiGateway: %s", ex.code().category().name());
-		return;
-	}
-	startReceive();
+	m_port = port;
+	m_mutilAddr = mutilAddr;
 }
 
 UdpServer::~UdpServer()
@@ -1483,6 +1809,30 @@ void UdpServer::startReceive()
 
 bool UdpServer::run()
 {
+	try {
+		m_socket.set_option(boost::asio::ip::udp::socket::reuse_address(true));
+		_log.Log(LOG_STATUS, "XiaomiGateway: UdpServer m_localip： %s, port:%d", UdpServer::m_localIp.c_str(), UdpServer::m_port);
+
+		if (UdpServer::m_localIp != "") {
+
+			boost::asio::ip::address listenAddr = boost::asio::ip::address::from_string(UdpServer::m_localIp);
+			boost::asio::ip::address mcastAddr = boost::asio::ip::address::from_string(UdpServer::m_mutilAddr);
+
+			m_socket.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), UdpServer::m_port));
+			m_socket.set_option(boost::asio::ip::multicast::join_group(mcastAddr.to_v4(), listenAddr.to_v4()));
+		}
+		else {
+			m_socket.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), UdpServer::m_port));
+			m_socket.set_option(boost::asio::ip::multicast::join_group(boost::asio::ip::address::from_string(UdpServer::m_mutilAddr)));
+		}
+	}
+	catch (const boost::system::system_error& ex) {
+
+		_log.Log(LOG_ERROR, "XiaomiGateway:  bind port or join group err %s", ex.code().category().name());
+		return false;
+	}
+	startReceive();
+
 	m_serThread = boost::thread(boost::bind(&boost::asio::io_service::run, &m_ioService));
 	SetThreadName(m_serThread.native_handle(), "XiaomiGwIO");
 	return true;
@@ -1499,156 +1849,26 @@ void UdpServer::stop()
 
 bool UdpServer::recvParamCheck(Json::Value& root)
 {
-	if (false == root.isMember(keyCmd) ||
-		false == root[keyCmd].isString()
-		)
-	{
-		_log.Log(LOG_ERROR, "ParamCheck: Receive the message cmd  not exist or not string");
+	if (false == paramCheckCmd(root)){
+		_log.Log(LOG_ERROR, "ParamCheck: Receive the message cmd  invaild");
 		return false;
 	}
 
 	std::string cmd = root[keyCmd].asString();
-
-	if (cmd.empty() )
-	{
-		_log.Log(LOG_ERROR, "ParamCheck: Receive the message cmd empty");
+	auto pair = sCheckMsgRule.find(cmd);
+	if (pair == sCheckMsgRule.end()){
+		_log.Log(LOG_STATUS, "cant find the cmd check list");
 		return false;
 	}
-
-	/* cmd model */
-	if ((cmd == rspRead) ||
-		(cmd == rspWrite) ||
-		(cmd == repReport) ||
-		(cmd == repHBeat))
-	{
-		if (false == root.isMember(keySid) ||
-			false == root.isMember(keyModel)||
-			false == root.isMember(keyParams)||
-			false == root[keySid].isString() ||
-			false == root[keyModel].isString() ||
-			false == root[keyParams].isArray())
-		{
-			_log.Log(LOG_ERROR, "ParamCheck: Receive the message cmd or model params error");
+	auto checkList = pair->second;
+	bool res;
+	for(const auto& check: checkList){
+		res = check(root);
+		if (false == res){
 			return false;
 		}
-
-		std::string sid = root[keySid].asString();
-		std::string model = root[keyModel].asString();
-		if (sid.empty() || model.empty())
-		{
-			_log.Log(LOG_ERROR, "ParamCheck: Receive the message sid or model empty");
-			return false;
-		}
-
-		if (!XiaomiGateway::checkZigbeeMac(sid))
-		{
-			_log.Log(LOG_ERROR, "ParamCheck: Device sid(mac:%s) is invalid", sid.c_str());
-			return false;
-		}
-
-		Json::Value params =  root[keyParams];
-		if (params.size() <= 0)
-		{
-			_log.Log(LOG_ERROR, "ParamCheck: Params is null at json");
-			return false;
-		}
-		return true;
 	}
-
-
-	if (cmd == rspDiscorey ||
-		cmd == repNewDevList)
-	{
-		if (false == root.isMember(keySid) ||
-			false == root.isMember(keyToken)||
-			false == root.isMember(keyDevList)||
-			false == root[keySid].isString() ||
-			false == root[keyToken].isString())
-/*
-		||
-			false == root[keyDevList].isArray())
-*/
-		{
-			_log.Log(LOG_ERROR, "Receive the message miss sid token dev_list error");
-			return false;
-		}
-
-		std::string sid = root[keySid].asString();
-		std::string token = root[keyToken].asString();
-		if (sid.empty() || token.empty())
-		{
-			_log.Log(LOG_ERROR, "ParamCheck: sid or token is empty at json");
-			return false;
-		}
-
-		if (!XiaomiGateway::checkZigbeeMac(sid))
-		{
-			_log.Log(LOG_ERROR, "ParamCheck: Device sid(mac) is invalid");
-			return false;
-		}
-
-		return true;
-	}
-
-
-	if (cmd == rspWhoIs)
-	{
-		if (false == root.isMember(keyIp) ||
-			false == root.isMember(keyProtocol) ||
-			false == root.isMember(keyPort) ||
-			false == root.isMember(keyModel)||
-			false == root[keyIp].isString() ||
-			false == root[keyProtocol].isString() ||
-			false == root[keyPort].isString() ||
-			false == root[keyModel].isString())
-		{
-			_log.Log(LOG_ERROR, "ParamCheck: Receive the message miss ip protocal port model");
-			return false;
-		}
-
-		std::string ip = root[keyIp].asString();
-		std::string protocol = root[keyProtocol].asString();
-		std::string port = root[keyPort].asString();
-		std::string model = root[keyModel].asString();
-		if (ip.empty() || protocol.empty() || port.empty() || model.empty())
-		{
-			_log.Log(LOG_ERROR, "ParamCheck: Receive the message ip protocal port model value null");
-			return false;
-		}
-
-		struct sockaddr_in addr;
-		int ret = ::inet_pton(AF_INET, ip.c_str(), (void*)&addr.sin_addr.s_addr);
-		if (ret != 1)
-		{
-			_log.Log(LOG_ERROR, "ParamCheck: Receive the message ip convert error");
-			return false;
-		}
-
-		try
-		{
-			ret = std::stoi(port);
-			if (ret < 1024 || ret > 65535)
-			{
-				throw std::range_error("port outof range");
-			}
-		}
-
-		catch(std::exception & e)
-		{
-			_log.Log(LOG_ERROR, "ParamCheck: Receive the message port(%s) error: %s", port.c_str(),  e.what());
-			return false;
-		}
-
-		if (protocol != "UDP")
-		{
-			_log.Log(LOG_ERROR, "ParamCheck: Receive the message protocol value error, expect UDP");
-			return false;
-		}
-		return true;
-	}
-
-	_log.Log(LOG_ERROR, "ParamCheck: Cmd not support, cmd:%s", cmd.c_str());
-	return false;
+	return true;
 }
 
 
@@ -1700,6 +1920,10 @@ void UdpServer::handleReceive(const boost::system::error_code & error, std::size
 	cmd = root[keyCmd].asString();
 	model = root[keyModel].asString();
 
+//	if (gateway->isDevInfoInited()){
+//		sleep_seconds(30);
+//	}
+
 	if ((cmd == rspRead) || (cmd == rspWrite) ||
 		(cmd == repReport) || (cmd == repHBeat)){
 
@@ -1736,7 +1960,6 @@ void UdpServer::handleReceive(const boost::system::error_code & error, std::size
 		startReceive();
 		return;
 	}
-
 
 	if (cmd == rspWhoIs){
 		gateway->joinGatewayHandler(root);
@@ -1806,7 +2029,7 @@ namespace http {
 
 		void CWebServer::Cmd_AddZigbeeDevice(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2){
+			if (session.rights != URIGHTS_ADMIN){
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
 			}
@@ -1861,7 +2084,7 @@ namespace http {
 
 		void CWebServer::Cmd_GetNewDevicesList(WebEmSession & session, const request& req, Json::Value &root)
 		{
-			if (session.rights != 2){
+			if (session.rights != URIGHTS_ADMIN){
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
 			}

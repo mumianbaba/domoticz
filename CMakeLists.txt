@@ -267,16 +267,24 @@ push/InfluxPush.cpp
 push/WebsocketPush.cpp
 httpclient/HTTPClient.cpp
 httpclient/UrlEncode.cpp
-hardware/1Wire.cpp
-hardware/1Wire/1WireByOWFS.cpp
-hardware/1Wire/1WireByKernel.cpp
-hardware/1Wire/1WireCommon.cpp
-hardware/1Wire/1WireForWindows.cpp
-hardware/AccuWeather.cpp
-hardware/AnnaThermostat.cpp
-hardware/Arilux.cpp
-hardware/ASyncSerial.cpp
-hardware/ASyncTCP.cpp
+)
+
+## APPEND hw supports
+option(USE_FULL_HW "Build Full hardware supported?" NO)
+if(USE_FULL_HW)
+  add_definitions(-DFULL_HW_SUPPORTED)
+  list(APPEND
+  domoticz_SRCS
+  hardware/1Wire.cpp
+  hardware/1Wire/1WireByOWFS.cpp
+  hardware/1Wire/1WireByKernel.cpp
+  hardware/1Wire/1WireCommon.cpp
+  hardware/1Wire/1WireForWindows.cpp
+  hardware/AccuWeather.cpp
+  hardware/AnnaThermostat.cpp
+  hardware/Arilux.cpp
+# hardware/ASyncSerial.cpp
+# hardware/ASyncTCP.cpp
 hardware/AtagOne.cpp
 hardware/BleBox.cpp
 hardware/Buienradar.cpp
@@ -320,8 +328,6 @@ hardware/EvohomeWeb.cpp
 hardware/ETH8020.cpp
 hardware/FritzboxTCP.cpp
 hardware/GoodweAPI.cpp
-hardware/Gpio.cpp
-hardware/GpioPin.cpp
 hardware/HardwareMonitor.cpp
 hardware/HarmonyHub.cpp
 hardware/Honeywell.cpp
@@ -392,7 +398,6 @@ hardware/serial/impl/unix.cpp
 hardware/SolarEdgeAPI.cpp
 hardware/SolarMaxTCP.cpp
 hardware/Sterbox.cpp
-hardware/SysfsGpio.cpp
 hardware/Tado.cpp
 hardware/TCPProxy/tcpproxy_server.cpp
 hardware/TE923.cpp
@@ -410,39 +415,86 @@ hardware/VolcraftCO20.cpp
 hardware/Winddelen.cpp
 hardware/WOL.cpp
 hardware/Wunderground.cpp
-hardware/XiaomiGateway.cpp
-hardware/Xiaomi/DevAttr.cpp
-hardware/Xiaomi/Device.cpp
-hardware/Xiaomi/Outlet.cpp
-hardware/Xiaomi/Override.cpp
-#hardware/Xiaomi/OutletChild.cpp
 hardware/Yeelight.cpp
 hardware/YouLess.cpp
 hardware/ZiBlueBase.cpp
 hardware/ZiBlueSerial.cpp
 hardware/ZiBlueTCP.cpp
 hardware/ZWaveBase.cpp
+  )
+endif()
+
+## GPIO
+# IF(EXISTS /sys/class/gpio)
+option(USE_GPIO "Build enable sys gpio" NO)
+IF(USE_GPIO)
+  message(STATUS "GPIO is available")
+  list(APPEND
+  hardware/SysfsGpio.cpp
+  hardware/Gpio.cpp
+  hardware/GpioPin.cpp
+  )
+  add_definitions(-DWITH_GPIO)
+ELSE()
+  message(STATUS "GPIO is not available")
+ENDIF()
+
+## APPEND basic hw
+list(APPEND
+domoticz_SRCS
+  hardware/serial/serial.cpp
+  hardware/serial/impl/unix.cpp
+  hardware/ASyncSerial.cpp
+  hardware/ASyncTCP.cpp
+  hardware/ColorSwitch.cpp
+  hardware/XiaomiGateway.cpp
+  hardware/Xiaomi/DevAttr.cpp
+  hardware/Xiaomi/Device.cpp
+  hardware/Xiaomi/Outlet.cpp
+  hardware/Xiaomi/Override.cpp
+  # hardware/Xiaomi/OutletChild.cpp
+  hardware/DomoticzHardware.cpp
+  hardware/DomoticzInternal.cpp
+  hardware/Dummy.cpp
 hardware/plugins/DelayedLink.cpp
 hardware/plugins/Plugins.cpp
 hardware/plugins/PluginManager.cpp
 hardware/plugins/PluginProtocols.cpp
 hardware/plugins/PluginTransports.cpp
 hardware/plugins/PythonObjects.cpp
+)
+
+## APPEND full hw notifications
+if(USE_FULL_HW)
+list(APPEND
+domoticz_SRCS
+  notifications/NotificationEmail.cpp
+  notifications/NotificationGCM.cpp
+  notifications/NotificationKodi.cpp
+  notifications/NotificationLogitechMediaServer.cpp
+  notifications/NotificationSMS.cpp
+  notifications/NotificationTelegram.cpp
+)
+endif()
+
+## CLOUD disabled
+option(USE_CLOUD "Build enable the cloud server supported" NO)
+if(NOT USE_CLOUD)
+  add_definitions(-DNOCLOUD)
+endif()
+
+## APPEND others
+list(APPEND
+domoticz_SRCS
 notifications/NotificationBase.cpp
 notifications/NotificationBrowser.cpp
-notifications/NotificationEmail.cpp
-notifications/NotificationGCM.cpp
 notifications/NotificationHelper.cpp
 notifications/NotificationHTTP.cpp
-notifications/NotificationKodi.cpp
-notifications/NotificationLogitechMediaServer.cpp
 notifications/NotificationPushbullet.cpp
 notifications/NotificationProwl.cpp
 notifications/NotificationPushover.cpp
 notifications/NotificationPushsafer.cpp
 notifications/NotificationPushalot.cpp
-notifications/NotificationSMS.cpp
-notifications/NotificationTelegram.cpp
 smtpclient/SMTPClient.cpp
 tcpserver/TCPClient.cpp
 tcpserver/TCPServer.cpp
@@ -526,15 +578,15 @@ else(USE_STATIC_BOOST)
    message(STATUS "Linking against boost dynamic libraries")
 endif(USE_STATIC_BOOST)
 
-find_package(Boost REQUIRED COMPONENTS thread system)
+find_package(Boost REQUIRED COMPONENTS thread system filesystem)
 if(Boost_FOUND)
     MESSAGE(STATUS "BOOST libraries found at: ${Boost_LIBRARY_DIRS}")
     MESSAGE(STATUS "Boost includes found at: ${Boost_INCLUDE_DIR}")
 else(Boost_FOUND)
-    MESSAGE(FATAL_ERROR "Boost thread/system library not found on your system, try to get this installed.")
+    MESSAGE(FATAL_ERROR "Boost thread/system/filesystem library not found on your system, try to get this installed.")
 endif(Boost_FOUND)
 
-target_link_libraries(domoticz Boost::thread Boost::system)
+target_link_libraries(domoticz Boost::thread Boost::system Boost::filesystem)
 
 # compare found vs required libBoost version
 if(Boost_VERSION VERSION_LESS DOMO_MIN_LIBBOOST_VERSION)
@@ -647,12 +699,7 @@ ELSE()
 ENDIF(OpenZWave)
 
 
-IF(EXISTS /sys/class/gpio)
-  message(STATUS "GPIO is available")
-  add_definitions(-DWITH_GPIO)
-ELSE()
-  message(STATUS "GPIO is not available")
-ENDIF()
+
 
 
 find_path(TELLDUSCORE_INCLUDE NAMES telldus-core.h)

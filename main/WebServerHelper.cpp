@@ -124,7 +124,9 @@ namespace http {
 			for (server_iterator it = serverCollection.begin(); it != serverCollection.end(); ++it) {
 				(*it)->SetWebRoot(webRoot);
 			 }
+			#ifndef NOCLOUD
 			proxymanager.SetWebRoot(webRoot);
+			#endif
 		}
 
 		void CWebServerHelper::ClearUserPasswords()

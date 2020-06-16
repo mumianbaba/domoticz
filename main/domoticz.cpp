@@ -1197,6 +1197,7 @@ int main(int argc, char**argv)
 	m_LastHeartbeat = mytime(NULL);
 	std::thread thread_watchdog(Do_Watchdog_Work);
 	SetThreadName(thread_watchdog.native_handle(), "Watchdog");
+	thread_watchdog.detach();
 
 	if (!m_mainworker.Start())
 	{
@@ -1235,6 +1236,8 @@ int main(int argc, char**argv)
 	}
 #endif
 	_log.Log(LOG_STATUS, "Closing application!...");
+	g_stop_watchdog = true;
+
 	fflush(stdout);
 	_log.Log(LOG_STATUS, "Stopping worker...");
 	try
@@ -1259,8 +1262,7 @@ int main(int argc, char**argv)
 	WSACleanup();
 	CoUninitialize();
 #endif
-	g_stop_watchdog = true;
-	thread_watchdog.join();
+	//thread_watchdog.join();
 	return 0;
 }
 

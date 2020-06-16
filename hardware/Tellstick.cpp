@@ -313,7 +313,7 @@ namespace http {
     namespace server {
         void CWebServer::Cmd_TellstickApplySettings(WebEmSession &session, const request &req, Json::Value &root)
         {
-            if (session.rights != 2)
+            if (session.rights != URIGHTS_ADMIN)
 			{
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed

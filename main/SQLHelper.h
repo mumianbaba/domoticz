@@ -315,6 +315,7 @@ public:
 	bool OpenDatabase();
 	void CloseDatabase();
 
+	bool DatabaseCheck(const std::string& path);
 	bool BackupDatabase(const std::string &OutputFile);
 	bool RestoreDatabase(const std::string &dbase);
 

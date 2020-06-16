@@ -35,6 +35,8 @@
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
+#include <boost/filesystem.hpp>
+
 #define DB_VERSION 139
 
 extern http::server::CWebServerHelper m_webservers;
@@ -667,9 +669,57 @@ CSQLHelper::~CSQLHelper(void)
 	CloseDatabase();
 }
 
+
+bool CSQLHelper::DatabaseCheck(const std::string& path)
+{
+	if (path.empty()){
+		_log.Log(LOG_ERROR, "database file empty error");
+		return false;
+	}
+
+	sqlite3 *database = nullptr;
+	int ret;
+
+	ret = sqlite3_open(path.c_str(), &database);
+	if (ret != SQLITE_OK) {
+
+		sqlite3_close( database );
+		_log.Log(LOG_ERROR, "sqlite3_open error");
+		return false;
+	}
+
+	sqlite3_stmt *integrity = nullptr;
+	bool success = false;
+
+	ret = sqlite3_prepare_v2( database, "PRAGMA integrity_check;", -1, &integrity, nullptr);
+	if (ret == SQLITE_OK) {
+
+		while ( sqlite3_step(integrity) == SQLITE_ROW)
+		{
+			const unsigned char *result = sqlite3_column_text(integrity, 0);
+			if ( result && !strcmp(( const char * )result, (const char *)"ok")){
+				success = true;
+				break;
+			}
+		}
+		sqlite3_finalize(integrity);
+	}
+
+	sqlite3_close(database);
+	database = nullptr;
+	return success;
+}
+
 bool CSQLHelper::OpenDatabase()
 {
 	//Open Database
+	bool res = false;
+	res =DatabaseCheck(m_dbase_name);
+	if (res == false){
+		boost::filesystem::remove(m_dbase_name);
+		_log.Log(LOG_ERROR, "the backup datebase check not pass");
+	}
+
 	int rc = sqlite3_open(m_dbase_name.c_str(), &m_dbase);
 	if (rc)
 	{
